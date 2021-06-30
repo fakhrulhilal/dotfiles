@@ -1,0 +1,5 @@
+#Host actua.host.name alias.host.name 1.2.3.4
+#	Hostname actual.host.name
+#	User git
+#	IdentityFile "~/.ssh/private.key"
+#	# must have file ~/.ssh/private.key.pub

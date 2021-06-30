@@ -1,0 +1,14 @@
+" Plugins: Load all the plugins ----------------------------------------------
+runtime plugins.vim
+
+" Standard: file settings ----------------------------------------------------
+runtime standards.vim
+
+" Styling: All styles --------------------------------------------------------
+runtime styling.vim
+
+" Additional commands --------------------------------------------------------
+runtime commands.vim
+
+" Shell configurations -------------------------------------------------------
+"runtime shell.vim

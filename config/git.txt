@@ -1,0 +1,84 @@
+[pull]
+	rebase = true
+
+[core]
+	pager = delta
+
+[delta]
+	features = unobtrusive-line-numbers decorations comparison
+	syntax-theme = Monokai Extended
+    whitespace-error-style = 22 reverse
+    side-by-side = true
+    plus-color = "#012800"
+
+[delta "comparison"]
+	minus-style = white red
+	minus-non-emph-style = bold red
+	minus-emph-style = bold white red
+	#minus-empty-line-marker-style = normal
+	zero-style = dim syntax
+	plus-non-emph-style = bold green
+	plus-emph-style = bold white green
+    
+[delta "unobtrusive-line-numbers"]
+    line-numbers = true
+    line-numbers-minus-style = "#444444"
+    line-numbers-zero-style = "#444444"
+    line-numbers-plus-style = "#444444"
+    line-numbers-left-format = "{nm:>2} |"
+    line-numbers-right-format = "{nm:>2}|"
+    line-numbers-left-style = white
+    line-numbers-right-style = white
+
+[delta "decorations"]
+    commit-decoration-style = bold yellow box ul
+    file-style = bold yellow
+    file-decoration-style = none
+    hunk-header-decoration-style = yellow box
+
+[interactive]
+    diffFilter = delta --color-only
+
+[difftool "delta"]
+	cmd = delta \"$LOCAL\" \"$REMOTE\" 
+	renames = true
+
+[difftool "codecompare"]
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codecompare.exe' -W \"$LOCAL\" \"$REMOTE\" 
+	renames = true
+
+[mergetool "codecompare"]
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codemerge.exe' -MF \"$LOCAL\" -TF \"$REMOTE\" -BF \"$BASE\" -RF \"$MERGED\" 
+	trustExitCode = true
+
+[difftool "vsdiffmerge"]
+	cmd = \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer\\vsdiffmerge.exe\" \"$LOCAL\" \"$REMOTE\" //t
+	keepBackup = false
+
+[mergetool "vsdiffmerge"]
+	cmd = \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer\\vsdiffmerge.exe\" \"$REMOTE\" \"$LOCAL\" \"$BASE\" \"$MERGED\" //m
+	keepBackup = false
+	trustExitCode = true
+
+[difftool "semanticdiff"]
+	cmd = \"$HOME\\AppData\\Local\\semanticmerge\\semanticmergetool.exe\" -s \"$LOCAL\" -d \"$REMOTE\"
+	keepBackup = false
+
+[mergetool "semanticmerge"]
+	cmd = \"$HOME\\AppData\\Local\\semanticmerge\\semanticmergetool.exe\" -d \"$LOCAL\" -s \"$REMOTE\" -b \"$BASE\" -r \"$MERGED\"
+	trustExitCode = true
+
+[mergetool]
+	keepBackup = false
+	prmopt = false
+
+[merge]
+	tool = codecompare
+	guitool = codecompare
+
+[diff]
+	tool = codecompare
+	guitool = codecompare
+
+[difftool]
+	prompt = false
