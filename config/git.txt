@@ -1,3 +1,11 @@
+#[user]
+	# Set GPG signing key
+	#signingkey = [publickey]
+
+# include this file, must use slash, not backlash (even in windows)
+#[include]
+#	path = C:/path/to/shell/config/git.txt
+
 [pull]
 	rebase = true
 
