@@ -36,6 +36,9 @@
                 }
             }
         }
+
+        $MSBuild = Find-MSBuild
+        $Nuget = Find-Nuget
     }
 
     Process {
@@ -60,14 +63,14 @@
                 Remove-Item $NugetPackageFolder -Force -Recurse
             }
             Get-ChildItem -Path $BaseFolder -Include bin,obj -Directory -Recurse | Remove-Item -Force -Recurse
-            &nuget restore $Path
+            &$Nuget restore $Path
         }
 
         if ($PSBoundParameters.ContainsKey('LangVersion')) {
-            &msbuild $Path /t:$Target /p:Configuration=$Configuration /p:LangVersion=$LangVersion
+            &"$MSBuild" $Path /t:$Target /p:Configuration=$Configuration /p:LangVersion=$LangVersion
         }
         else {
-            &msbuild $Path /t:$Target /p:Configuration=$Configuration
+            &"$MSBuild" $Path /t:$Target /p:Configuration=$Configuration
         }
     }
 }
