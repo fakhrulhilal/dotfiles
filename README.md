@@ -25,10 +25,10 @@ My personal shell experience
 5. Try configure your name globally so the global git config will be created (`git config --global user.name "your name"`)
 6. Edit your global git config (%UserProfile%\.gitconfig), add this line:
 
-   ```
-  [include]
-		path = C:\\path\\to\\shell\\config\\git.txt
-   ```
+```
+[include]
+    path = C:\\path\\to\\shell\\config\\git.txt
+```
 
 6. Run PowerShell core with administrative privilege, replace profile with this command: `New-Item -ItemType SymbolicLink -Path $PROFILE -Value C:\path\to\shell\powershell\_profile.ps1 -Force`
 7. Run PowerShell core with user privilege for the first time, it will install required module (ohmposh, posh-git)
