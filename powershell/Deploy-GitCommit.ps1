@@ -18,7 +18,10 @@ function Deploy-GitCommit {
 		$BackupFolder,
 
 		[switch]
-		$Simulate
+		$Simulate,
+
+		[switch]
+		$BackupOnly
 	)
 
 	Begin {
@@ -75,8 +78,11 @@ function Deploy-GitCommit {
 			Copy-FilesInner -Files $Files -BaseDirectory $SourceFolder -Simulate:$Simulate `
 				-DestinationFolder $PostFolder -SourceFolder $SourceFolder
 		}
-		Copy-FilesInner -Files $Files -BaseDirectory $SourceFolder -Simulate:$Simulate `
-			-DestinationFolder $DestinationFolder -SourceFolder $SourceFolder
+
+		if (-not($BackupOnly)) {
+			Copy-FilesInner -Files $Files -BaseDirectory $SourceFolder -Simulate:$Simulate `
+				-DestinationFolder $DestinationFolder -SourceFolder $SourceFolder
+		}
 	}
 
 	End {
