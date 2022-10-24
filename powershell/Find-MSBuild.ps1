@@ -1,13 +1,16 @@
 ﻿function Find-MSBuild {
     $VSEditions = 'Enterprise', 'Professional', 'Community', 'BuildTools'
-    $VSVersions = '2019', '2017'
+    $VSVersions = '2022', '2019', '2017'
+    $ProgramFiles = $Env:ProgramFiles, ${Env:ProgramFiles(x86)}
 
     foreach ($Version in $VSVersions) {
         foreach ($Edition in $VSEditions) {
-            $MSBuildPath = [System.IO.Path]::Combine(${Env:ProgramFiles(x86)}, "Microsoft Visual Studio\$($Version)\$($Edition)\MSBuild\Current\Bin\MSBuild.exe")
-            if (Test-Path -Path $MSBuildPath -PathType Leaf) {
-                Write-Verbose "Using MSBuild from $MSBuildPath"
-                return (Get-Item -Path $MSBuildPath)
+            foreach ($ProgramFile in $ProgramFiles) {
+				$MSBuildPath = [System.IO.Path]::Combine($ProgramFile, "Microsoft Visual Studio\$($Version)\$($Edition)\MSBuild\Current\Bin\MSBuild.exe")
+				if (Test-Path -Path $MSBuildPath -PathType Leaf) {
+					Write-Verbose "Using MSBuild from $MSBuildPath"
+					return (Get-Item -Path $MSBuildPath)
+				}
             }
         }
     }
