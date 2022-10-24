@@ -29,15 +29,6 @@ foreach ($Script in $Scripts) {
 	. $Script.FullName
 }
 
-$Script:PhpBin = Get-Command -Name php -CommandType Application -ErrorAction SilentlyContinue
-if ($null -ne $Script:PhpBin) {
-  $Script:PhpConf = [System.IO.Path]::Combine(([System.IO.Path]::GetDirectoryName($Script:PhpBin.Source)), 'php.ini')
-  $Script:ArcBin = 'D:\Aplikasi\arcanist\bin\arc'
-  function Arc {
-      &$Script:PhpBin -f "$($Script:ArcBin)" -c "$($Script:PhpConf)" -- $Args
-  }
-}
-
 foreach ($Module in @('posh-git', 'oh-my-posh')) {
     $Test = Get-Module -Name $Module -ListAvailable
     if ($null -eq $Test) {
@@ -48,3 +39,4 @@ foreach ($Module in @('posh-git', 'oh-my-posh')) {
     Import-Module $Module
 }
 Set-PoshPrompt -Theme (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName
+$Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
