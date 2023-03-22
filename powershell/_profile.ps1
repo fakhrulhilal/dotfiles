@@ -18,18 +18,16 @@ function Get-ActualPath {
     }
 }
 
-$ThisScript = [System.IO.Path]::GetFileName($PSCommandPath)
-$ScriptPath = Get-ActualPath -Path $PSCommandPath
-$ScriptPath = $ScriptPath.Directory.FullName
+$ThisScript = Get-ActualPath -Path $PSCommandPath
+$ScriptPath = $ThisScript.Directory.FullName
+$AutoCompletionPath = Join-Path -Path $ScriptPath -ChildPath 'AutoCompletions'
 $ConfigPath = (Get-Item -Path ([System.IO.Path]::Combine($ScriptPath, '..', 'config'))).FullName
 $ErrorActionPreference = 'Stop'
 
-$Scripts = Get-ChildItem -Path $ScriptPath -Filter *.ps1 -File | ?{ $ThisScript -ne $_.Name }
-foreach ($Script in $Scripts) {
-	. $Script.FullName
-}
+Get-ChildItem -Path $ScriptPath -Filter *.ps1 -File | ?{ $ThisScript.Name -ne $_.Name } | %{ . $_ }
+Get-ChildItem -Path $AutoCompletionPath -Filter *.ps1 -File | %{ . $_ }
 
-foreach ($Module in @('posh-git', 'oh-my-posh')) {
+foreach ($Module in @('posh-git')) {
     $Test = Get-Module -Name $Module -ListAvailable
     if ($null -eq $Test) {
         Write-Host "Getting required module: $Module"
@@ -38,5 +36,13 @@ foreach ($Module in @('posh-git', 'oh-my-posh')) {
 
     Import-Module $Module
 }
-Set-PoshPrompt -Theme (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName
+
+$OhMyPosh = Get-Command -Name oh-my-posh -WarningAction SilentlyContinue
+if ($null -eq $OhMyPosh) {
+    winget install JanDeDobbeleer.OhMyPosh -s winget
+}
+$Env:POSH_THEMES_PATH = (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName
+oh-my-posh init pwsh | Invoke-Expression
 $Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
+
+'ThisScript', 'ScriptPath', 'AutoCompletionPath', 'ConfigPath' | %{ Remove-Variable -Name $_ }
