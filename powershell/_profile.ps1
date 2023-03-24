@@ -37,7 +37,7 @@ foreach ($Module in @('posh-git')) {
     Import-Module $Module
 }
 
-$OhMyPosh = Get-Command -Name oh-my-posh -WarningAction SilentlyContinue
+$OhMyPosh = Get-Command -Name oh-my-posh -ErrorAction SilentlyContinue
 if ($null -eq $OhMyPosh) {
     winget install JanDeDobbeleer.OhMyPosh -s winget
 }
