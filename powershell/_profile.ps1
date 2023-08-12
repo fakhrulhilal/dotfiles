@@ -1,4 +1,4 @@
-function Get-ActualPath {
+function Resolve-ActualPath {
     param(
         [string]
         [ValidateNotNullOrEmpty()]
@@ -18,7 +18,7 @@ function Get-ActualPath {
     }
 }
 
-$ThisScript = Get-ActualPath -Path $PSCommandPath
+$ThisScript = Resolve-ActualPath -Path $PSCommandPath
 $ScriptPath = $ThisScript.Directory.FullName
 $AutoCompletionPath = Join-Path -Path $ScriptPath -ChildPath 'AutoCompletions'
 $ConfigPath = (Get-Item -Path ([System.IO.Path]::Combine($ScriptPath, '..', 'config'))).FullName
