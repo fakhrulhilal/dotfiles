@@ -19,12 +19,13 @@ function Resolve-ActualPath {
 }
 
 $ThisScript = Resolve-ActualPath -Path $PSCommandPath
-$ScriptPath = $ThisScript.Directory.FullName
-$AutoCompletionPath = Join-Path -Path $ScriptPath -ChildPath 'AutoCompletions'
-$ConfigPath = (Get-Item -Path ([System.IO.Path]::Combine($ScriptPath, '..', 'config'))).FullName
+$ProfilePath = $ThisScript.Directory.FullName
+$ScriptsPath = Join-Path -Path $ProfilePath -ChildPath 'Scripts'
+$AutoCompletionPath = Join-Path -Path $ProfilePath -ChildPath 'AutoCompletions'
+$ConfigPath = (Get-Item -Path ([System.IO.Path]::Combine($ProfilePath, '..', 'config'))).FullName
 $ErrorActionPreference = 'Stop'
 
-Get-ChildItem -Path $ScriptPath -Filter *.ps1 -File | ?{ $ThisScript.Name -ne $_.Name } | %{ . $_ }
+Get-ChildItem -Path $ScriptsPath -Filter *.ps1 -File | ?{ $ThisScript.Name -ne $_.Name } | %{ . $_ }
 Get-ChildItem -Path $AutoCompletionPath -Filter *.ps1 -File | %{ . $_ }
 
 foreach ($Module in @('posh-git')) {
@@ -45,4 +46,4 @@ $Env:POSH_THEMES_PATH = (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-
 oh-my-posh init pwsh | Invoke-Expression
 $Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
 
-'ThisScript', 'ScriptPath', 'AutoCompletionPath', 'ConfigPath' | %{ Remove-Variable -Name $_ }
+'ThisScript', 'ProfilePath', 'ScriptsPath', 'AutoCompletionPath', 'ConfigPath' | %{ Remove-Variable -Name $_ }
