@@ -20,6 +20,7 @@
     plus-color = "#012800"
 
 [delta "comparison"]
+	true-color = always
 	minus-style = white red
 	minus-non-emph-style = bold red
 	minus-emph-style = bold white red

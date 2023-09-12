@@ -1,4 +1,6 @@
 " standard: file settings ----------------------------------------------------
+set nocompatible
+
 syntax on
 filetype plugin on
 filetype indent on
@@ -14,22 +16,6 @@ if has('multi_byte')
   scriptencoding utf-8
   set encoding=utf-8
 end
-
-" presentation settings
-set relativenumber              " precede each line with its line number
-set nu
-set numberwidth=3       " number of culumns for line numbers
-set textwidth=0         " Do not wrap words (insert)
-set nowrap              " Do not wrap words (view)
-set showcmd             " Show (partial) command in status line.
-set showmatch           " Show matching brackets.
-set ruler               " line and column number of the cursor position
-set wildmenu            " enhanced command completion
-set visualbell          " use visual bell instead of beeping
-set laststatus=2        " always show the status line
-set list
-set completeopt=menuone,noinsert,noselect
-set nocompatible
 
 " highlight spell errors
 hi SpellErrors guibg=red guifg=black ctermbg=red ctermfg=black
@@ -49,12 +35,19 @@ set cinoptions=:0,(s,u0,U1,g0,t0 " some indentation options ':h cinoptions' for 
 set modelines=5         " number of lines to check for vim: directives at the start/end of file
 "set fixdel                 " fix terminal code for delete (if delete is broken but backspace works)
 set autoindent          " automatically indent new line
-
+set et                  " expand tabs into spaces
 set ts=4                " number of spaces in a tab
 set sw=4                " number of spaces for indent
-set et                  " expand tabs into spaces
-
 set ttimeoutlen=50      " fast Esc to normal mode
+set ruler               " line and column number of the cursor position
+set completeopt=menuone,noinsert,noselect
+set list
+set laststatus=2        " always show the status line
+set wildmenu            " enhanced command completion
+set showmatch           " Show matching brackets.
+set nowrap              " Do not wrap words (view)
+set textwidth=0         " Do not wrap words (insert)
+set numberwidth=3       " number of culumns for line numbers
 
 " mouse settings
 if has("mouse")
@@ -62,11 +55,7 @@ if has("mouse")
 endif
 set mousehide                           " Hide mouse pointer on insert mode."
 
-" search settings
-set incsearch           " Incremental search
-set hlsearch            " Highlight search match
-set ignorecase          " Do case insensitive matching
-set smartcase           " do not ignore if search pattern has CAPS
+
 "
 " omni completion settings
 set ofu=syntaxcomplete#Complete
