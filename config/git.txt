@@ -11,6 +11,7 @@
 
 [core]
 	pager = delta
+	autocrlf = false
 
 [delta]
 	features = unobtrusive-line-numbers decorations comparison

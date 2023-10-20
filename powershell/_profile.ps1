@@ -44,6 +44,6 @@ if ($null -eq $OhMyPosh) {
 }
 $Env:POSH_THEMES_PATH = (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName
 oh-my-posh init pwsh | Invoke-Expression
-$Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
+$Env:PSModulePath = $Env:PSModulePath+";$ProfilePath\Modules"
 
 'ThisScript', 'ProfilePath', 'ScriptsPath', 'AutoCompletionPath', 'ConfigPath' | %{ Remove-Variable -Name $_ }

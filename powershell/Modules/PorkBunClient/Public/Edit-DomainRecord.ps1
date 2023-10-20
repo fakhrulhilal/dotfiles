@@ -49,8 +49,6 @@ function Edit-DomainRecord {
 
     Process {
         Get-Response -Path "dns/editByNameType/$Domain/$RecordType/$Name" -Body @{
-            name = $Name
-			type = $RecordType
 			content = $Content
 			ttl = $TimeToLive
         } -Connection $Connection
