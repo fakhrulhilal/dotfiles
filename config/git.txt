@@ -54,11 +54,11 @@
 	renames = true
 
 [difftool "codecompare"]
-	cmd = 'C:\\Program Files\\Code Compare\\CodeCompare.exe' -W \"$LOCAL\" \"$REMOTE\" 
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\CodeCompare.exe' -W \"$LOCAL\" \"$REMOTE\" 
 	renames = true
 
 [mergetool "codecompare"]
-	cmd = 'C:\\Program Files\\Code Compare\\CodeMerge.exe' -MF \"$LOCAL\" -TF \"$REMOTE\" -BF \"$BASE\" -RF \"$MERGED\" 
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\CodeMerge.exe' -MF \"$LOCAL\" -TF \"$REMOTE\" -BF \"$BASE\" -RF \"$MERGED\" 
 	trustExitCode = true
 
 [difftool "vsdiffmerge"]

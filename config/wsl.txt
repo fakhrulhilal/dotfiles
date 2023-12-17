@@ -1,0 +1,6 @@
+# location %UserProfile%\.wslconfig
+# installation: `New-Item -ItemType SymbolicLink -Path ~/.wslconfig -Value wsl.txt`
+
+[wsl2]
+guiApplications=false
+memory=24GB
