@@ -23,8 +23,8 @@ function {
         local _fgBrightCode=_code+_fgBright
         local _bgDarkCode=_code+_bgDark
         local _bgBrightCode=_code+_bgBright
-        "COLOR_FG_(${(P)_color})=${_set}[${_fgDarkCode}m"
-        "COLOR_FG_${color%=*}=${_set}[${_fgDarkCode}m"
+        #declare "COLOR_FG_(${(P)_color})=${_set}[${_fgDarkCode}m"
+        declare "COLOR_FG_${color%=*}=${_set}[${_fgDarkCode}m"
         declare "COLOR_FG_${color%=*}_LIGHT=${_set}[${_fgBrightCode}m"
         declare "COLOR_BG_${color%=*}=${_set}[${_bgDarkCode}m"
         declare "COLOR_BG_${color%=*}_LIGHT=${_set}[${_bgBrightCode}m"
