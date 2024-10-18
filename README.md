@@ -36,3 +36,14 @@ My personal shell experience
 9. Right click on top title of your PowerShell core app, and choose Properties. Under Font tab, change font to CaskaydiaCove NF. You should see nice font now.
 10. Download the latest version of [delta](https://github.com/dandavison/delta/releases). Put it in any folder which is registered in PATH env variable. 
 
+### Using Nix
+
+1. Install from [official guide](https://nixos.org/download/#download-nix)
+2. Create link global nix config:
+   ```
+   cd /path/to/this/repo
+   mkdir ~/.config/nix
+   ln -sfv nix/nix.conf ~/.config/nix
+   ```
+3. Install nix-darwin: `nix run nix-darwin -- switch --flake './nix#mbp'`
+4. Setup MacOS according to our configuration: `darwin-rebuild switch --flake './nix#mbp'`
