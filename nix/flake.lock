@@ -5,11 +5,11 @@
       "locked": {
         "lastModified": 1,
         "narHash": "sha256-iGjRrJ/ZcAMpZpXo4AODJC/NhC1uEGNtBVxjnsX5Vt8=",
-        "path": "/nix/store/37hnqcri1dzc5qmfyw9b7ms3gqbyv8q6-source/nix/apps/teams",
+        "path": "/nix/store/8hqvxi7hvclw06fki518h12av0lsp276-source/nix/apps/teams",
         "type": "path"
       },
       "original": {
-        "path": "/nix/store/37hnqcri1dzc5qmfyw9b7ms3gqbyv8q6-source/nix/apps/teams",
+        "path": "/nix/store/8hqvxi7hvclw06fki518h12av0lsp276-source/nix/apps/teams",
         "type": "path"
       }
     },

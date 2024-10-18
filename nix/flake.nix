@@ -15,17 +15,6 @@
       nixpkgs.config.allowUnfree = true;
       # List packages installed in system profile. To search by name, run:
       # $ nix-env -qaP | grep wget
-      packages.systems.default =
-      # Notice the reference to nixpkgs here.
-        with import nixpkgs { system = "aarch64-darwin"; };
-        stdenv.mkDerivation {
-          name = "hello";
-          src = self;
-          buildInputs = [
-            (callPackage app-msteams {}) # callPackage because is not a flake
-             # or dumbdep.packages."${system}".default # if it was a flake.
-          ];
-        };
       environment.systemPackages =
       [ 
         pkgs.vim
@@ -105,6 +94,17 @@
     };
   in
   {
+    packages.systems.default =
+    # Notice the reference to nixpkgs here.
+    with import nixpkgs { system = "aarch64-darwin"; };
+    stdenv.mkDerivation {
+      name = "local-package";
+      src = self;
+      buildInputs = [
+        (callPackage app-msteams {})
+      ];
+    };
+
     # Build darwin flake using:
     # $ darwin-rebuild build --flake .#simple
     darwinConfigurations."mbp" = nix-darwin.lib.darwinSystem {
