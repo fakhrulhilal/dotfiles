@@ -10,9 +10,11 @@
 	rebase = true
 
 [core]
-	pager = delta
+    pager = delta
 
 [delta]
+    navigate = true
+    #true-color = always
 	features = unobtrusive-line-numbers decorations comparison
 	syntax-theme = Monokai Extended
     whitespace-error-style = 22 reverse

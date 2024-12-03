@@ -29,14 +29,8 @@ foreach ($Script in $Scripts) {
 	. $Script.FullName
 }
 
-foreach ($Module in @('posh-git', 'oh-my-posh')) {
-    $Test = Get-Module -Name $Module -ListAvailable
-    if ($null -eq $Test) {
-        Write-Host "Getting required module: $Module"
-        Install-Module -Name $Module -Scope CurrentUser -Force
-    }
-
+foreach ($Module in @('posh-git')) {
     Import-Module $Module
 }
-Set-PoshPrompt -Theme (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName
+oh-my-posh init pwsh --config (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName | Invoke-Expression
 $Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
