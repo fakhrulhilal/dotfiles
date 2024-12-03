@@ -5,3 +5,5 @@ set ts=4
 set shiftwidth=4
 set expandtab
 set autoindent
+set modeline
+set modelines=1
