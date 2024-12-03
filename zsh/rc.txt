@@ -15,8 +15,12 @@ plug "zsh-users/zsh-syntax-highlighting"
 plug "wintermi/zsh-brew"
 plug "zsh-users/zsh-history-substring-search"
 plug "zap-zsh/web-search"
+plug "wintermi/zsh-oh-my-posh"
 
 # Load and initialise completion system
 autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
+unsetopt EXTENDED_GLOB
 
+# bun completions
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
