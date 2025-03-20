@@ -1,0 +1,200 @@
+version: "3.7"
+name: lab
+
+services:
+  #mailserver:
+  #  image: ghcr.io/docker-mailserver/docker-mailserver:latest
+  #  container_name: mailsrv
+  #  hostname: mail.imah.home
+  #  restart: unless-stopped
+  #  ports:
+  #    - "25:25"
+  #    - "465:465"
+  #    - "587:587"
+  #    - "993:993"
+  #  volumes:
+  #    - dms_data:/var/mail/
+  #    - dms_state:/var/mail-state/
+  #    - dms_log:/var/log/mail/
+  #    - dms_config:/tmp/docker-mailserver/
+  #    - /etc/localtime:/etc/localtime:ro
+  #    - /home/iroel/proyek/certificates:/certs:ro
+  #  environment:
+  #    - TZ=Asia/Jakarta
+  #    - SSL_TYPE=manual
+  #    - SSL_CERT_PATH=/certs/imah.home.crt
+  #    - SSL_KEY_PATH=/certs/imah.home.key
+  #    - POSTMASTER_ADDRESS=postmaster@imah.home
+  #    - ENABLE_RSPAMD=0
+  #    - ENABLE_CLAMAV=0
+  #    - ENABLE_FAIL2BAN=0
+  #    - ENABLE_AMAVIS=0
+  #    - ENABLE_DNSBL=0
+  #    - ENABLE_OPENDKIM=1
+  #    - ENABLE_POP3=1
+  #    - ENABLE_IMAP=1
+
+  management-server:
+    image: iroel/lab/server
+    container_name: cosmos-server
+    hostname: lab
+    build:
+      context: cosmos
+      dockerfile: $PWD/cosmos.Dockerfile
+    restart: unless-stopped
+    #privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      - /:/host:ro
+      #- /var/lib/cosmos:/config
+      - ${HOST_DATADIR}/cosmos/data:/var/lib/cosmos
+      - ${HOST_DATADIR}:/project:ro
+      - /home/iroel/proyek/certificates:/certificates
+      - /home/iroel/proyek/dotfiles:/dotfiles:ro
+    network_mode: host
+
+  dns-server:
+    image: technitium/dns-server
+    container_name: technitiumns
+    network_mode: host
+    hostname: technitium
+    ports:
+      - 53:53
+      - 67:67/udp
+      - 8053:8053/tcp
+      - 44353:44353/tcp
+    environment:
+      - DNS_SERVER_DOMAIN=lab.iroel.xyz
+      - DNS_SERVER_ADMIN_PASSWORD="${APP_PASSWORD}"
+      - DNS_SERVER_WEB_SERVICE_HTTP_PORT=8053
+      - DNS_SERVER_WEB_SERVICE_HTTPS_PORT=44353
+      - DNS_SERVER_WEB_SERVICE_USE_SELF_SIGNED_CERT=false
+      - DNS_SERVER_FORWARDERS=8.8.8.8,1.1.1.1
+      - DNS_SERVER_FORWARDER_PROTOCOL=Https
+      - DNS_SERVER_LOG_USING_LOCAL_TIME=true
+      - TZ=${TZ}
+    volumes:
+      - dns_config:/etc/dns
+    restart: unless-stopped
+
+  monitor:
+    container_name: uptime-monitor
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    #depends_on:
+      #- dbserver
+    networks:
+      - backend
+      - frontend
+    volumes:
+      #- ${HOST_DATADIR}/statping:/app
+      - ${HOST_DATADIR}/uptime-kuma/data:/app/data
+    environment:
+      PORT: 3001
+      #CLEANUP_INTERVAL: 30d
+
+  ddns-client:
+    image: qmcgaw/ddns-updater
+    container_name: ddns
+    network_mode: bridge
+    #ports:
+    #  - 8054:8000/tcp
+    volumes:
+      - ${HOST_DATADIR}/ddns/data:/updater/data
+    environment:
+      - TZ=${TZ}
+      - PERIOD=30m
+      - UPDATE_COOLDOWN_PERIOD=1h
+      - PUBLICIP_FETCHERS=all
+      - PUBLICIP_HTTP_PROVIDERS=all
+      - PUBLICIPV4_HTTP_PROVIDERS=all
+      - PUBLICIPV6_HTTP_PROVIDERS=all
+      - PUBLICIP_DNS_PROVIDERS=all
+      - PUBLICIP_DNS_TIMEOUT=3s
+      - HTTP_TIMEOUT=10s
+      - HEALTH_HEALTHCHECKSIO_UUID="get-from-healthcheck.io-dashboard"
+
+      # Web UI
+      - LISTENING_ADDRESS=:8000
+      - ROOT_URL=/
+
+      # Backup
+      - BACKUP_PERIOD=0 # 0 to disable
+      - BACKUP_DIRECTORY=/updater/data
+
+      # Other
+      - LOG_LEVEL=info
+      - LOG_CALLER=hidden
+      - SHOUTRRR_ADDRESSES=
+    restart: unless-stopped
+
+  ai-backend:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - 11434:11434
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: "12G"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    #restart: unless-stopped
+    networks:
+      - ainet
+
+  ai-frontend:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ai-web
+    ports:
+      - 8034:8080
+    environment:
+      - OLLAMA_BASE_URL=http://lab.iroel.xyz:11434
+    volumes:
+      - open-webui:/app/backend/data
+    restart: unless-stopped
+    networks:
+      - ainet
+      - backend
+      - frontend
+
+  iotserver:
+    image: homebridge/homebridge:latest
+    #restart: unless-stopped
+    container_name: homebridge
+    network_mode: host
+    volumes:
+      - homebridge:/homebridge
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '1'
+    environment:
+      TZ: ${TZ}
+      ENABLE_AVAHI: 0
+    healthcheck:
+      test: curl --fail localhost:8581 || exit 1
+      interval: 60s
+      retries: 5
+      start_period: 300s
+      timeout: 2s
+
+volumes:
+  dns_config:
+  ollama:
+  open-webui:
+  homebridge:
+
+networks:
+  ainet:
+  backend:
+    external: true
+  frontend:
+    external: true
