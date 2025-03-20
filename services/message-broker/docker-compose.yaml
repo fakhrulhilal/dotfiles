@@ -1,0 +1,182 @@
+name: message-services
+
+services:
+  nats:
+    image: nats:alpine
+    container_name: nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - natsdata:/data
+    command: "-js --sd /data"
+
+  kafka-keeper:
+    image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
+    hostname: zookeeper
+    container_name: kafka.keeper
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181", "|", "grep", "imok"]
+      timeout: 5s
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+  
+  kafka-broker:
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    hostname: broker
+    container_name: kafka.broker
+    depends_on:
+      kafka-keeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    volumes:
+      #- ${HOST_DATADIR}/kafka-broker/data:/var/lib/kafka/data
+      - kafkabrokerdata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      timeout: 5s
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      #KAFKA_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_EXT://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://${HOST_ADDR}:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  kafka-schema-registry:
+    image: confluentinc/cp-schema-registry:${KAFKA_VERSION}
+    hostname: schema-registry
+    container_name: kafka.schema-registry
+    depends_on:
+      kafka-keeper:
+        condition: service_healthy 
+      kafka-broker:
+        condition: service_healthy 
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/mode | grep -qiE '\"mode\":\"\\w+\"'"]
+      timeout: 5s
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'kafka.keeper:2181'
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081'
+
+  kafka-rest-proxy:
+    image: confluentinc/cp-kafka-rest:${KAFKA_VERSION}
+    container_name: kafka.api
+    hostname: rest-proxy
+    ports:
+      - "8082:8082"
+    environment:
+      KAFKA_REST_ZOOKEEPER_CONNECT: kafka.keeper:2181
+      KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
+      KAFKA_REST_HOST_NAME: kafka-api
+      KAFKA_REST_BOOTSTRAP_SERVERS: broker:29092
+      KAFKA_REST_SCHEMA_REGISTRY_URL: 'http://kafka.schema-registry:8081'
+    healthcheck:
+      test: curl -sf http://localhost:8082/brokers | grep -E '"brokers":\[[^\]]+'
+      timeout: 3s
+    depends_on:
+      kafka-schema-registry:
+        condition: service_healthy 
+      kafka-broker:
+        condition: service_healthy 
+
+  #redpanda-broker:
+  #  image: docker.redpanda.com/redpandadata/redpanda:v24.3.6
+  #  container_name: redpanda.broker
+  #  hostname: broker
+  #  restart: unless-stopped
+  #  healthcheck:
+  #    test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:\\s*true'"]
+  #    interval: 5s
+  #    timeout: 3s
+  #    retries: 3
+  #  command:
+  #    - redpanda start
+  #    - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
+  #    - --advertise-kafka-addr internal://broker:29092,external://${HOST_ADDR}:9092
+  #    - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:8082
+  #    - --advertise-pandaproxy-addr internal://broker:28082,external://${HOST_ADDR}:8082
+  #    - --schema-registry-addr internal://0.0.0.0:28081,external://0.0.0.0:8081
+  #    - --rpc-addr redpanda-broker:33145
+  #    - --advertise-rpc-addr redpanda-broker:33145
+  #    - --mode dev-container
+  #    - --smp 1
+  #    - --overprovisioned
+  #    - --memory 1G
+  #    - --reserve-memory 0M
+  #    - --default-log-level=info
+  #    - --set redpanda.data_transforms_enabled=true
+  #  volumes:
+  #    - redpandadata:/var/lib/redpanda/data
+  #  ports:
+  #    - 9092:9092
+  #    - 8081:8081
+  #    - 8082:8082
+  #    - 9644:9644
+  #  environment:
+  #    HOST_ADDR: ${HOST_ADDR:-localhost}
+  #    REDPANDA_ENABLE_USAGE_STATS: false
+  #    REDPANDA_DATA_TRANSFORMS_ENABLED: true
+  #  networks:
+  #    default:
+  #      aliases:
+  #        - schema-registry
+  #        - rest-proxy
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda.console
+    restart: unless-stopped
+    depends_on:
+      kafka-broker:
+        condition: service_started
+      #redpanda-broker:
+      #  condition: service_healthy
+      #  #condition: service_started
+    entrypoint: /bin/sh
+    command:
+    - -c
+    - |
+        cat <<EOF > /tmp/config.yml
+        kafka:
+          brokers: ["broker:29092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://schema-registry:8081"]
+        EOF
+
+        if [ "$$TARGET" = "redpanda" ]; then
+          cat <<EOF >> /tmp/config.yml
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-broker:9644"]
+        EOF
+        fi
+
+        exec /app/console
+    environment:
+      TARGET: kafka
+      CONFIG_FILEPATH: /tmp/config.yml
+
+volumes:
+  natsdata:
+  redpandadata:
+  kafkabrokerdata:
+ 
+networks:
+  default:
+    name: backend
+    external: true

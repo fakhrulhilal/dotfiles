@@ -1,0 +1,40 @@
+name: development-services
+
+services:
+  rnwood:
+    image: rnwood/smtp4dev
+    container_name: rnwood.smtp
+    hostname: rnwood
+    ports:
+    - "8025:80"
+    - "44325:443"
+    - "25:25"
+    volumes:
+     - ${CERT_DIR}:/certs
+    restart: unless-stopped
+    environment:
+      SERVEROPTIONS__URLS: "https://*:443;http://*:80"
+      ASPNETCORE_Kestrel__Certificates__Default__Path: "/certs/dev.lab.pfx"
+      ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD}"
+
+  redis:
+    image: redis
+    container_name: redis.cache
+    hostname: redis
+    ports:
+    - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: if ping="$$(redis-cli -h localhost ping)" && [ "$$ping" = 'PONG' ]; then exit 0; else exit 1; fi
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  default:
+    name: backend
+    external: true
+
+secrets:
+  app_pwd:
+    file: ${SECRETS_DIR}/app_password.txt

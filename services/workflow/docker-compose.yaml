@@ -1,0 +1,51 @@
+name: workflow
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8nflow
+    ports:
+      - 6001:8080
+    volumes:
+      - ${HOST_DATADIR}/n8n/data:/home/node/.n8n
+    environment:
+      TZ: ${TZ}
+      GENERIC_TIMEZONE: ${TZ}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_HOST: postgredb
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_SCHEMA: public
+      DB_POSTGRESDB_USER: ${DB_USERNAME}
+      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
+      N8N_PORT: 8080
+      #N8N_LICENSE_ACTIVATION_KEY: "grab from email from hello@info.n8n.io with subject: Your free n8n license key to unlock selected paid features"
+      N8N_EDITOR_BASE_URL: "https://n8n.lab.iroel.xyz"
+      WEBHOOK_URL: "https://n8n.lab.iroel.xyz"
+
+  noco:
+    image: nocodb/nocodb:latest
+    container_name: nocodb
+    volumes:
+      - ${HOST_DATADIR}/noco/data:/usr/app/data
+    ports:
+      - 6002:8080
+    environment:
+      PORT: 8080
+      NC_DB: "pg://postgreedb:5432?u=${DB_USERNAME}&p=${DB_PASSWORD}&d=noco"
+      NC_AUTH_JWT_SECRET: "randomized-string-secret"
+      NC_ADMIN_EMAIL: ${APP_EMAIL}
+      NC_ADMIN_PASSWORD: ${APP_PASSWORD}
+      NC_SMTP_FROM: ${APP_EMAIL}
+      NC_SMTP_HOST: ${SMTP_HOST}
+      NC_SMTP_PORT: ${SMTP_PORT}
+      NC_SMTP_USERNAME: ${SMTP_USERNAME}
+      NC_SMTP_PASSWORD: ${SMTP_PASSWORD}
+      NC_SMTP_SECURE: true
+      NC_REDIS_URL: "redis://redis.cache:6379/1"
+
+networks:
+  default:
+    name: backend
+    external: true

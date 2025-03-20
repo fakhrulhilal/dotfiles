@@ -1,0 +1,335 @@
+name: observability
+
+services:
+  seq:
+    image: datalust/seq:latest
+    container_name: seq.log
+    hostname: seq
+    ports:
+    - "8041:80"
+    - "5341:5341"
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      #SEQ_FIRSTRUN_ADMINPASSWORDHASH: "${APP_PASSWORD}"
+    volumes:
+    - ${HOST_DATADIR}/seq/data:/data
+    healthcheck:
+      test: curl -s -f http://localhost:5341 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  aspire:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+    container_name: aspire.dashboard
+    hostname: aspire
+    ports:
+      - 4417:18889
+      - 4418:18890
+    environment:
+      #ASPNETCORE_URLS: "http://*:80"
+      #DOTNET_DASHBOARD_OTLP_ENDPOINT_URL: "http://*:4417"
+      DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL: "http://localhost:18890"
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: true
+      Dashboard__ApplicationName: "iroel.xyz Lab"
+
+  elastic-search:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
+    container_name: elastic.search
+    hostname: elastic-search
+    labels:
+      co.elastic.logs/module: elasticsearch
+    mem_limit: 4g
+    ports:
+    - "9200:9200"
+    - "9300:9300"
+    restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ${HOST_DATADIR}/elastic-search/data:/usr/share/elasticsearch/data:rw
+      - elasticconfig:/usr/share/elasticsearch/config
+    environment:
+      discovery.type: single-node
+      ELASTIC_USERNAME: "elastic"
+      ELASTIC_PASSWORD_FILE: "/run/secrets/app_pwd"
+      xpack.security.enabled: true
+      ES_JAVA_OPTS: '-Xms2g -Xmx2g'
+      bootstrap.memory_lock: true
+    secrets:
+      - app_pwd
+    healthcheck:
+      test: ["CMD-SHELL", "curl -Is -u 'elastic:${APP_PASSWORD}' http://localhost:9200 | grep -q 'HTTP/1.1 200 OK'"]
+      timeout: 3s
+
+  #elastic-log:
+  #  image: docker.elastic.co/logstash/logstash:${ELK_VERSION}
+  #  hostname: logstash
+  #  container_name: elastic.log
+  #  depends_on:
+  #    elastic-search:
+  #      condition: service_healthy
+  #  mem_limit: 1g
+  #  #restart: unless-stopped
+  #  volumes:
+  #    - ${HOST_DATADIR}/elastic-log/data:/usr/share/logstash/data
+  #  environment:
+  #    MONITORING_ELASTICSEARCH_HOSTS: "http://elastic-search:9200"
+  #    API_HTTP_HOST: "0.0.0.0"
+
+  elastic-apm:
+    image: docker.elastic.co/apm/apm-server:${ELK_VERSION}
+    container_name: elastic.apm
+    hostname: apm
+    depends_on:
+      elastic-search:
+        condition: service_healthy
+    command:
+      - --strict.perms=false
+      - -e
+      #- -E apm-server.host="0.0.0.0:9400"
+      #- -E apm-server.auth.anonymous.enabled=true
+      #- -E apm-server.otlp.enabled=true
+      #- -E apm-server.instrumentation.enabled=true
+      #- -E output.elasticsearch.hosts=["http://elastic-search:9200"]
+      #- -E output.elasticsearch.username=elastic
+      #- -E output.elasticsearch.password=${APP_PASSWORD}
+    #environment:
+    #  apm-server.auth.secret_token: INGEST_T0k3n
+    #  server.port: 9400
+    mem_limit: 2g
+    restart: unless-stopped
+    ports:
+      - "9400:9400" # APM Server API
+      - "9317:4317" # OTLP gRPC (for OpenTelemetry SDKs)
+      - "9318:4318" # OTLP HTTP (for OpenTelemetry SDKs)
+    volumes:
+      - ${HOST_DATADIR}/elastic-apm/config/default.yml:/usr/share/apm-server/apm-server.yml:ro
+      - ${HOST_DATADIR}/elastic-apm/logs:/usr/share/apm-server/logs
+      - ${HOST_DATADIR}/elastic-apm/data:/usr/share/apm-server/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsSL", "http://localhost:9400"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  #elastic-metric:
+  #  depends_on:
+  #    - elastic-kibana
+  #    - elastic-search
+  #  image: docker.elastic.co/beats/metricbeat:${ELK_VERSION}
+  #  container_name: elastic.metric
+  #  hostname: metricbeat
+  #  user: root
+  #  #command:
+  #  #  - --strict.perms=false
+  #  volumes:
+  #    - ${HOST_DATADIR}/elastic-metricbeat/data:/usr/share/metricbeat/data
+  #    - ${HOST_DATADIR}/elastic-metricbeat/config.yml:/usr/share/metricbeat/metricbeat.yml:ro"
+  #    - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  #    - "/sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro"
+  #    - "/proc:/hostfs/proc:ro"
+  #    - "/:/hostfs:ro"
+  #  environment:
+  #    - ELASTIC_USER=elastic
+  #    - ELASTIC_PASSWORD=${APP_PASSWORD}
+  #    - ELASTIC_HOST=http://elastic-search:9200
+  #    - KIBANA_HOST=http://kibana:5601
+  #    - LOGSTASH_HOST=http://logstash:9600
+
+  #elastic-agent:
+  #  image: docker.elastic.co/beats/elastic-agent:${ELK_VERSION}
+  #  container_name: elastic.fleet
+  #  hostname: fleet
+  #  depends_on:
+  #    elastic-kibana:
+  #      condition: service_healthy
+  #    elastic-search:
+  #      condition: service_healthy
+  #  #restart: unless-stopped
+  #  volumes:
+  #    - ${HOST_DATADIR}/elastic-fleet/data:/usr/share/elastic-agent/state/data
+  #    - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
+  #    - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  #    - "/sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro"
+  #    - "/proc:/hostfs/proc:ro"
+  #    - "/:/hostfs:ro"
+  #  ports:
+  #    - 8220:8220
+  #    - 8200:8200
+  #  user: root
+  #  environment:
+  #    - FLEET_ENROLL=1
+  #    - FLEET_INSECURE=true
+  #    - FLEET_SERVER_ELASTICSEARCH_HOST=http://elastic-search:9200
+  #    - FLEET_SERVER_ELASTICSEARCH_INSECURE=true
+  #    - FLEET_SERVER_ENABLE=1
+  #    - FLEET_SERVER_INSECURE_HTTP=true
+  #    - FLEET_SERVER_POLICY_ID=fleet-server-policy
+  #    - FLEET_SERVER_PORT=8220
+  #    - FLEET_URL=http://elastic-fleet:8220
+  #    - FLEET_SERVER_SERVICE_TOKEN=${FLEET_TOKEN}
+  #    - KIBANA_FLEET_SETUP=1
+  #    - KIBANA_FLEET_USERNAME=elastic
+  #    - KIBANA_FLEET_PASSWORD=${APP_PASSWORD}
+  #    - KIBANA_HOST=http://kibana:5601
+
+  elastic-kibana:
+    image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
+    container_name: elastic.kibana
+    hostname: kibana
+    depends_on:
+      elastic-search:
+        condition: service_healthy
+    labels:
+      co.elastic.logs/module: kibana
+    mem_limit: 4g
+    ports:
+      - 5601:5601
+    restart: unless-stopped
+    volumes:
+      - ${HOST_DATADIR}/kibana/data:/usr/share/kibana/data
+      - ${HOST_DATADIR}/kibana/config.yml:/usr/share/kibana/config/kibana.yml:ro
+    environment:
+      CSP_STRICT: false
+      SERVER_NAME: "kibana.lab.iroel.xyz"
+      ELASTICSEARCH_HOSTS: "http://elastic-search:9200"
+      ELASTICSEARCH_USERNAME: "kibana_system"
+      ELASTICSEARCH_PASSWORD: "${APP_PASSWORD}"
+      ELASTIC_APM_SECRET_TOKEN: "${ELASTIC_APM_SECRET_TOKEN}"
+    healthcheck:
+      test: curl -Lfs http://localhost:5601/api/status | grep -q '"level":"available"'
+      timeout: 3s
+
+  #memcached:
+  #  image: memcached:1.6.29
+  #  container_name: memcached
+  #  ports:
+  #    - "11211:11211"
+  #  restart: unless-stopped
+  #  environment:
+  #    - MEMCACHED_MAX_MEMORY=64m  # Set the maximum memory usage
+  #    - MEMCACHED_THREADS=4       # Number of threads to use
+
+  #grafana-loki:
+  #  image: grafana/loki:latest
+  #  container_name: grafana.loki
+  #  hostname: loki
+  #  restart: unless-stopped
+  #  command: -config.file=/etc/loki/local-config.yaml
+  #  ports:
+  #    - 3100:3100
+
+  #grafana-promtail:
+  #  image: grafana/promtail:latest
+  #  container_name: grafana.promtail
+  #  hostname: promtail
+  #  volumes:
+  #    - /var/log:/var/log
+  #  command: -config.file=/etc/promtail/config.yml
+  #  restart: unless-stopped
+
+  #grafana-tempo:
+  #  image: grafana/tempo:latest
+  #  container_name: grafana.tempo
+  #  hostname: tempo
+  #  command: [ "-config.file=/etc/tempo.yaml" ]
+  #  restart: unless-stopped
+  #  volumes:
+  #    - ${HOST_DATADIR}/tempo/config.yaml:/etc/tempo.yaml
+  #    - ${HOST_DATADIR}/tempo/data:/var/tempo
+  #  ports:
+  #    - "14268:14268"  # jaeger ingest
+  #    - "3200:3200"   # tempo
+  #    - "9095:9095" # tempo grpc
+  #    - "4317:4317"  # otlp grpc
+  #    - "4318:4318"  # otlp http
+  #    - "9411:9411"   # zipkin
+  #  depends_on:
+  #    - memcached
+
+  #grafana-prometheus:
+  #  image: prom/prometheus:latest
+  #  container_name: grafana.prometheus
+  #  hostname: prometheus
+  #  command:
+  #    - --config.file=/etc/prometheus.yaml
+  #    - --web.enable-remote-write-receiver
+  #    - --enable-feature=exemplar-storage
+  #    - --enable-feature=native-histograms
+  #  volumes:
+  #    - ../shared/prometheus.yaml:/etc/prometheus.yaml
+  #  restart: unless-stopped
+  #  ports:
+  #    - "9090:9090"
+
+  #grafana:
+  #  image: grafana/grafana:latest
+  #  container_name: grafana.dashboard
+  #  entrypoint:
+  #    - sh
+  #    - -euc
+  #    - |
+  #      mkdir -p /etc/grafana/provisioning/datasources
+  #      cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+  #      apiVersion: 1
+  #      datasources:
+  #      - name: "Log"
+  #        type: loki
+  #        access: proxy 
+  #        orgId: 1
+  #        url: http://loki:3100
+  #        basicAuth: false
+  #        isDefault: true
+  #        version: 1
+  #        editable: false
+  #      - name: "Traces"
+  #        type: tempo
+  #        access: proxy
+  #        orgId: 1
+  #        url: http://tempo:3200
+  #        basicAuth: false
+  #        isDefault: true
+  #        version: 1
+  #        editable: false
+  #        apiVersion: 1
+  #        uid: tempo
+  #        jsonData:
+  #          httpMethod: GET
+  #          serviceMap:
+  #            datasourceUid: prometheus
+  #          streamingEnabled:
+  #            search: true
+  #      - name: "Metrics"
+  #        type: prometheus
+  #        uid: prometheus
+  #        access: proxy
+  #        orgId: 1
+  #        url: http://prometheus:9090
+  #        basicAuth: false
+  #        isDefault: false
+  #        version: 1
+  #        editable: false
+  #        jsonData:
+  #          httpMethod: GET
+  #      EOF
+  #      /run.sh
+  #  restart: unless-stopped
+  #  volumes:
+  #    - ${HOST_DATADIR}/grafana/data:/var/lib/grafana
+  #  environment:
+  #    - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+  #    - GF_AUTH_ANONYMOUS_ENABLED=true
+  #    - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+
+volumes:
+  elasticconfig:
+ 
+networks:
+  default:
+    name: backend
+    external: true
+
+secrets:
+  app_pwd:
+    file: ${SECRETS_DIR}/app_password.txt

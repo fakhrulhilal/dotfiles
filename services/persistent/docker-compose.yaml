@@ -1,0 +1,91 @@
+name: persistent-services
+
+services:
+  db-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssqldb
+    hostname: mssql
+    ports:
+      - "1433:1433"
+    restart: unless-stopped
+    volumes:
+      - ${HOST_DATADIR}/mssql/data:/var/opt/mssql
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD}"
+      MSSQL_MEMORY_LIMIT_MB: 4096
+      MSSQL_AGENT_ENABLED: true
+      TZ: ${TZ}
+
+  az-storage:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite
+    volumes:
+      - blobvolume:/data
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    restart: unless-stopped
+    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
+    environment:
+      AZURITE_DB: "mssql://azure:azur3_services@mssqldb:1433/azurite"
+  
+  db-postgre:
+    image: postgres
+    container_name: postgredb
+    hostname: postgre
+    restart: unless-stopped
+    shm_size: 2gb
+    ports:
+      - 5432:5432
+    environment:
+      - TZ=${TZ}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ${HOST_DATADIR}/postgres/data:/var/lib/postgresql/data
+
+  nosql-mongo:
+    image: mongo
+    container_name: mongodb
+    hostname: mongo
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      TIME_ZONE: ${TZ}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - 27017:27017
+    volumes:
+      - ${HOST_DATADIR}/mongo/data:/data/db
+
+  nosql-cosmos:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: cosmosdb
+    hostname: azcosmos
+    cpu_count: 2
+    tty: true
+    volumes:
+      - ${HOST_DATADIR}/azcosmos/data:/tmp
+      - ${CERT_DIR}:/certs:ro
+    ports:
+      - "8083:8081"
+      - "8900:8900"
+      - "8901:8901"
+      - "8979:8979"
+      - "10250-10255:10250-10255"
+    restart: unless-stopped
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 4
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: true
+
+volumes:
+  blobvolume:
+ 
+networks:
+  default:
+    name: backend
+    external: true
