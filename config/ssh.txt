@@ -1,9 +1,19 @@
 # we can also set default for all hosts here
 # must have file ~/.ssh/private.key.pub
 #IdentityFile "~/.ssh/private.key"
+# Load from this file
+# Include /path/to/this/file
 
 #Host actual.host.name alias.host.name 1.2.3.4
 #	Hostname actual.host.name
 #	User git
 	# override the key for this host
 #	IdentityFile "~/.ssh/private.key"
+
+Host ssh.dev.azure.com vs-ssh.visualstudio.com
+    Hostname ssh.dev.azure.com
+    HostkeyAlgorithms +ssh-rsa
+    #MACs +hmac-sha2-512,+hmac-sha2-256
+    KexAlgorithms +diffie-hellman-group-exchange-sha256,+diffie-hellman-group14-sha1,+diffie-hellman-group1-sha1
+    # Azure DevOps currently only supports RSA algorithm
+    IdentityFile "~/.ssh/id_rsa"
