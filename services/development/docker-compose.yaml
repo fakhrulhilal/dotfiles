@@ -1,10 +1,12 @@
-name: development-services
+name: development
 
 services:
   rnwood:
     image: rnwood/smtp4dev
-    container_name: rnwood.smtp
+    container_name: smtp.rnwood
     hostname: rnwood
+    labels:
+      - dev.orbstack.domains=rnwood.${DOMAIN}
     ports:
     - "8025:80"
     - "44325:443"
@@ -19,8 +21,10 @@ services:
 
   redis:
     image: redis
-    container_name: redis.cache
+    container_name: cache.redis
     hostname: redis
+    labels:
+      - dev.orbstack.domains=redis.${DOMAIN}
     ports:
     - "6379:6379"
     restart: unless-stopped
@@ -34,7 +38,3 @@ networks:
   default:
     name: backend
     external: true
-
-secrets:
-  app_pwd:
-    file: ${SECRETS_DIR}/app_password.txt

@@ -1,10 +1,12 @@
-name: persistent-services
+name: persistent
 
 services:
   db-mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: mssqldb
+    container_name: db.mssql
     hostname: mssql
+    labels:
+      - dev.orbstack.domains=mssql.${DOMAIN}
     ports:
       - "1433:1433"
     restart: unless-stopped
@@ -17,26 +19,14 @@ services:
       MSSQL_AGENT_ENABLED: true
       TZ: ${TZ}
 
-  az-storage:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    container_name: azurite
-    volumes:
-      - blobvolume:/data
-    ports:
-      - "10000:10000"
-      - "10001:10001"
-      - "10002:10002"
-    restart: unless-stopped
-    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
-    environment:
-      AZURITE_DB: "mssql://azure:azur3_services@mssqldb:1433/azurite"
-  
   db-postgre:
     image: postgres
-    container_name: postgredb
+    container_name: db.postgre
     hostname: postgre
     restart: unless-stopped
     shm_size: 2gb
+    labels:
+      - dev.orbstack.domains=postgre.${DOMAIN}
     ports:
       - 5432:5432
     environment:
@@ -51,6 +41,8 @@ services:
     image: mongo
     container_name: mongodb
     hostname: mongo
+    labels:
+      - dev.orbstack.domains=mongo.${DOMAIN}
     restart: unless-stopped
     environment:
       TZ: ${TZ}
@@ -66,6 +58,9 @@ services:
     image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
     container_name: cosmosdb
     hostname: azcosmos
+    labels:
+      - dev.orbstack.domains=azcosmos.${DOMAIN}
+      - dev.orbstack.http-port=8081
     cpu_count: 2
     tty: true
     volumes:
@@ -82,6 +77,22 @@ services:
       AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 4
       AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: true
 
+  az-storage:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite
+    labels:
+      - dev.orbstack.domains=azurite.${DOMAIN}
+    volumes:
+      - azuritedata:/data
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    restart: unless-stopped
+    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
+    environment:
+      AZURITE_DB: "mssql://azure:azur3_services@mssqldb:1433/azurite"
+  
 volumes:
   blobvolume:
  

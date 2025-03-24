@@ -5,6 +5,8 @@ services:
     image: datalust/seq:latest
     container_name: seq.log
     hostname: seq
+    labels:
+      - dev.orbstack.domains=seq.${DOMAIN}
     ports:
     - "8041:80"
     - "5341:5341"
@@ -24,6 +26,9 @@ services:
     image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
     container_name: aspire.dashboard
     hostname: aspire
+    labels:
+      - dev.orbstack.domains=aspire.${DOMAIN}
+      - dev.orbstack.http-port=18888
     ports:
       - 4417:18889
       - 4418:18890
@@ -39,7 +44,9 @@ services:
     container_name: elastic.search
     hostname: elastic-search
     labels:
-      co.elastic.logs/module: elasticsearch
+      - co.elastic.logs/module=elasticsearch
+      - dev.orbstack.domains=search.elastic.${DOMAIN}
+      - dev.orbstack.http-port=9200
     mem_limit: 4g
     ports:
     - "9200:9200"
@@ -81,6 +88,9 @@ services:
     image: docker.elastic.co/apm/apm-server:${ELK_VERSION}
     container_name: elastic.apm
     hostname: apm
+    labels:
+      - dev.orbstack.domains=otlp.elastic.${DOMAIN}
+      - dev.orbstack.http-port=9400
     depends_on:
       elastic-search:
         condition: service_healthy
@@ -182,7 +192,9 @@ services:
       elastic-search:
         condition: service_healthy
     labels:
-      co.elastic.logs/module: kibana
+      - co.elastic.logs/module=kibana
+      - dev.orbstack.domains=kibana.elastic.${DOMAIN}
+      - dev.orbstack.http-port=5601
     mem_limit: 4g
     ports:
       - 5601:5601

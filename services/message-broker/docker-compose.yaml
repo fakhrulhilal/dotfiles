@@ -1,10 +1,12 @@
-name: message-services
+name: message-broker
 
 services:
   nats:
     image: nats:alpine
     container_name: nats
     restart: unless-stopped
+    labels:
+      - dev.orbstack.domains=nats.${DOMAIN}
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -16,6 +18,8 @@ services:
     image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
     hostname: zookeeper
     container_name: kafka.keeper
+    labels:
+      - dev.orbstack.domains=keeper.kafka.${DOMAIN}
     ports:
       - "2181:2181"
     healthcheck:
@@ -32,10 +36,11 @@ services:
     depends_on:
       kafka-keeper:
         condition: service_healthy
+    labels:
+      - dev.orbstack.domains=kafka.${DOMAIN}
     ports:
       - "9092:9092"
     volumes:
-      #- ${HOST_DATADIR}/kafka-broker/data:/var/lib/kafka/data
       - kafkabrokerdata:/var/lib/kafka/data
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
@@ -46,6 +51,7 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       #KAFKA_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_EXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://${HOST_ADDR}:9092
+      #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://broker.${DOMAIN}:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -60,6 +66,9 @@ services:
         condition: service_healthy 
       kafka-broker:
         condition: service_healthy 
+    labels:
+      - dev.orbstack.domains=schema-registry.kafka.${DOMAIN}
+      - dev.orbstack.http-port=8081
     ports:
       - "8081:8081"
     healthcheck:
@@ -75,6 +84,9 @@ services:
     image: confluentinc/cp-kafka-rest:${KAFKA_VERSION}
     container_name: kafka.api
     hostname: rest-proxy
+    labels:
+      - dev.orbstack.domains=api.kafka.${DOMAIN}
+      - dev.orbstack.http-port=8082
     ports:
       - "8082:8082"
     environment:
