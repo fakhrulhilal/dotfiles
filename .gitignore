@@ -1,3 +1,7 @@
+# configuration files
+.env
+docker-compose.override.y?ml
+
 bin/
 obj/
 .ionide/
@@ -30,6 +34,7 @@ dotnet-uninstall-debian-packages.sh
 
 # Project Rider IDE files
 .idea.powershell/
+.idea/
 
 # Ignore executables
 *.exe

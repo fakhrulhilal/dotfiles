@@ -15,7 +15,7 @@ services:
       ACCEPT_EULA: "Y"
       #SEQ_FIRSTRUN_ADMINPASSWORDHASH: "${APP_PASSWORD}"
     volumes:
-    - ${HOST_DATADIR}/seq/data:/data
+      - seqdata:/data
     healthcheck:
       test: curl -s -f http://localhost:5341 || exit 1
       interval: 30s
@@ -45,7 +45,7 @@ services:
     hostname: elastic-search
     labels:
       - co.elastic.logs/module=elasticsearch
-      - dev.orbstack.domains=search.elastic.${DOMAIN}
+      - dev.orbstack.domains=search.elastic.${DOMAIN},search.elastic.local
       - dev.orbstack.http-port=9200
     mem_limit: 4g
     ports:
@@ -54,8 +54,8 @@ services:
     restart: unless-stopped
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ${HOST_DATADIR}/elastic-search/data:/usr/share/elasticsearch/data:rw
-      - elasticconfig:/usr/share/elasticsearch/config
+      - elasticsearchdata:/usr/share/elasticsearch/data
+      - elasticsearchconfig:/usr/share/elasticsearch/config
     environment:
       discovery.type: single-node
       ELASTIC_USERNAME: "elastic"
@@ -89,7 +89,7 @@ services:
     container_name: elastic.apm
     hostname: apm
     labels:
-      - dev.orbstack.domains=otlp.elastic.${DOMAIN}
+      - dev.orbstack.domains=otlp.elastic.${DOMAIN},apm.elastic.local
       - dev.orbstack.http-port=9400
     depends_on:
       elastic-search:
@@ -114,9 +114,9 @@ services:
       - "9317:4317" # OTLP gRPC (for OpenTelemetry SDKs)
       - "9318:4318" # OTLP HTTP (for OpenTelemetry SDKs)
     volumes:
-      - ${HOST_DATADIR}/elastic-apm/config/default.yml:/usr/share/apm-server/apm-server.yml:ro
-      - ${HOST_DATADIR}/elastic-apm/logs:/usr/share/apm-server/logs
-      - ${HOST_DATADIR}/elastic-apm/data:/usr/share/apm-server/data
+      - ./elastic-apm/config/default.yml:/usr/share/apm-server/apm-server.yml:ro
+      - elasticapmlog:/usr/share/apm-server/logs
+      - elasticapmdata:/usr/share/apm-server/data
     healthcheck:
       test: ["CMD", "curl", "-fsSL", "http://localhost:9400"]
       interval: 30s
@@ -193,15 +193,15 @@ services:
         condition: service_healthy
     labels:
       - co.elastic.logs/module=kibana
-      - dev.orbstack.domains=kibana.elastic.${DOMAIN}
+      - dev.orbstack.domains=kibana.elastic.${DOMAIN},kibana.elastic.local
       - dev.orbstack.http-port=5601
     mem_limit: 4g
     ports:
       - 5601:5601
     restart: unless-stopped
     volumes:
-      - ${HOST_DATADIR}/kibana/data:/usr/share/kibana/data
-      - ${HOST_DATADIR}/kibana/config.yml:/usr/share/kibana/config/kibana.yml:ro
+      - elastickibanadata:/usr/share/kibana/data
+      - ./kibana/config.yml:/usr/share/kibana/config/kibana.yml:ro
     environment:
       CSP_STRICT: false
       SERVER_NAME: "kibana.lab.iroel.xyz"
@@ -335,7 +335,12 @@ services:
   #    - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
 
 volumes:
-  elasticconfig:
+  seqdata:
+  elasticsearchdata:
+  elasticsearchconfig:
+  elasticapmdata:
+  elasticapmlog:
+  elastickibanadata:
  
 networks:
   default:

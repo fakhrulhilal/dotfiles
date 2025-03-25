@@ -11,7 +11,8 @@ services:
       - "1433:1433"
     restart: unless-stopped
     volumes:
-      - ${HOST_DATADIR}/mssql/data:/var/opt/mssql
+      - mssqldata:/var/opt/mssql
+    profiles: [sql]
     environment:
       ACCEPT_EULA: Y
       MSSQL_SA_PASSWORD: "${DB_PASSWORD}"
@@ -29,21 +30,23 @@ services:
       - dev.orbstack.domains=postgre.${DOMAIN}
     ports:
       - 5432:5432
+    profiles: [sql]
     environment:
       - TZ=${TZ}
       - POSTGRES_USER=${DB_USERNAME}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - ${HOST_DATADIR}/postgres/data:/var/lib/postgresql/data
+      - postgredata:/var/lib/postgresql/data
 
   nosql-mongo:
     image: mongo
-    container_name: mongodb
+    container_name: db.mongo
     hostname: mongo
     labels:
       - dev.orbstack.domains=mongo.${DOMAIN}
     restart: unless-stopped
+    profiles: [nosql]
     environment:
       TZ: ${TZ}
       TIME_ZONE: ${TZ}
@@ -52,11 +55,11 @@ services:
     ports:
       - 27017:27017
     volumes:
-      - ${HOST_DATADIR}/mongo/data:/data/db
+      - mongodata:/data/db
 
   nosql-cosmos:
     image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-    container_name: cosmosdb
+    container_name: db.cosmos
     hostname: azcosmos
     labels:
       - dev.orbstack.domains=azcosmos.${DOMAIN}
@@ -64,8 +67,7 @@ services:
     cpu_count: 2
     tty: true
     volumes:
-      - ${HOST_DATADIR}/azcosmos/data:/tmp
-      - ${CERT_DIR}:/certs:ro
+      - azcosmosdata:/tmp
     ports:
       - "8083:8081"
       - "8900:8900"
@@ -73,13 +75,15 @@ services:
       - "8979:8979"
       - "10250-10255:10250-10255"
     restart: unless-stopped
+    profiles: [nosql]
     environment:
       AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 4
       AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: true
 
   az-storage:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    container_name: azurite
+    container_name: blob.azurite
+    hostname: azurite
     labels:
       - dev.orbstack.domains=azurite.${DOMAIN}
     volumes:
@@ -90,12 +94,17 @@ services:
       - "10002:10002"
     restart: unless-stopped
     command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
+    profiles: [blob]
     environment:
       AZURITE_DB: "mssql://azure:azur3_services@mssqldb:1433/azurite"
-  
+
 volumes:
-  blobvolume:
- 
+  mssqldata:
+  postgredata:
+  mongodata:
+  azcosmosdata:
+  azuritedata:
+
 networks:
   default:
     name: backend

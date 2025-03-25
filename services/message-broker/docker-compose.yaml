@@ -25,6 +25,7 @@ services:
     healthcheck:
       test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181", "|", "grep", "imok"]
       timeout: 5s
+    profiles: [kafka]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -42,6 +43,7 @@ services:
       - "9092:9092"
     volumes:
       - kafkabrokerdata:/var/lib/kafka/data
+    profiles: [kafka]
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
       timeout: 5s
@@ -71,6 +73,7 @@ services:
       - dev.orbstack.http-port=8081
     ports:
       - "8081:8081"
+    profiles: [kafka]
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8081/mode | grep -qiE '\"mode\":\"\\w+\"'"]
       timeout: 5s
@@ -89,6 +92,7 @@ services:
       - dev.orbstack.http-port=8082
     ports:
       - "8082:8082"
+    profiles: [kafka]
     environment:
       KAFKA_REST_ZOOKEEPER_CONNECT: kafka.keeper:2181
       KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
@@ -104,48 +108,52 @@ services:
       kafka-broker:
         condition: service_healthy 
 
-  #redpanda-broker:
-  #  image: docker.redpanda.com/redpandadata/redpanda:v24.3.6
-  #  container_name: redpanda.broker
-  #  hostname: broker
-  #  restart: unless-stopped
-  #  healthcheck:
-  #    test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:\\s*true'"]
-  #    interval: 5s
-  #    timeout: 3s
-  #    retries: 3
-  #  command:
-  #    - redpanda start
-  #    - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
-  #    - --advertise-kafka-addr internal://broker:29092,external://${HOST_ADDR}:9092
-  #    - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:8082
-  #    - --advertise-pandaproxy-addr internal://broker:28082,external://${HOST_ADDR}:8082
-  #    - --schema-registry-addr internal://0.0.0.0:28081,external://0.0.0.0:8081
-  #    - --rpc-addr redpanda-broker:33145
-  #    - --advertise-rpc-addr redpanda-broker:33145
-  #    - --mode dev-container
-  #    - --smp 1
-  #    - --overprovisioned
-  #    - --memory 1G
-  #    - --reserve-memory 0M
-  #    - --default-log-level=info
-  #    - --set redpanda.data_transforms_enabled=true
-  #  volumes:
-  #    - redpandadata:/var/lib/redpanda/data
-  #  ports:
-  #    - 9092:9092
-  #    - 8081:8081
-  #    - 8082:8082
-  #    - 9644:9644
-  #  environment:
-  #    HOST_ADDR: ${HOST_ADDR:-localhost}
-  #    REDPANDA_ENABLE_USAGE_STATS: false
-  #    REDPANDA_DATA_TRANSFORMS_ENABLED: true
-  #  networks:
-  #    default:
-  #      aliases:
-  #        - schema-registry
-  #        - rest-proxy
+  redpanda-broker:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.6
+    container_name: redpanda.broker
+    hostname: broker
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:\\s*true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    command:
+      - redpanda start
+      - --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr internal://broker:29092,external://${HOST_ADDR}:9092
+      - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:8082
+      - --advertise-pandaproxy-addr internal://broker:28082,external://${HOST_ADDR}:8082
+      #- --advertise-pandaproxy-addr internal://broker:28082,external://redpanda.${DOMAIN}:8082
+      - --schema-registry-addr internal://0.0.0.0:28081,external://0.0.0.0:8081
+      - --rpc-addr redpanda-broker:33145
+      - --advertise-rpc-addr redpanda-broker:33145
+      - --mode dev-container
+      - --smp 1
+      - --overprovisioned
+      - --memory 1G
+      - --reserve-memory 0M
+      - --default-log-level=info
+      - --set redpanda.data_transforms_enabled=true
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
+    labels:
+      - dev.orbstack.domains=redpanda.${DOMAIN}
+    ports:
+      - 9092:9092
+      - 8081:8081
+      - 8082:8082
+      - 9644:9644
+    profiles: [redpanda]
+    environment:
+      HOST_ADDR: ${HOST_ADDR:-localhost}
+      REDPANDA_ENABLE_USAGE_STATS: false
+      REDPANDA_DATA_TRANSFORMS_ENABLED: true
+    networks:
+      default:
+        aliases:
+          - schema-registry
+          - rest-proxy
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
@@ -179,6 +187,7 @@ services:
         fi
 
         exec /app/console
+    profiles: [redpanda]
     environment:
       TARGET: kafka
       CONFIG_FILEPATH: /tmp/config.yml
