@@ -19,7 +19,7 @@ services:
     hostname: zookeeper
     container_name: kafka.keeper
     labels:
-      - dev.orbstack.domains=keeper.kafka.${DOMAIN}
+      - dev.orbstack.domains=keeper.kafka.${DOMAIN},keeper.kafka.local
     ports:
       - "2181:2181"
     healthcheck:
@@ -38,7 +38,7 @@ services:
       kafka-keeper:
         condition: service_healthy
     labels:
-      - dev.orbstack.domains=kafka.${DOMAIN}
+      - dev.orbstack.domains=kafka.${DOMAIN},kafka.local
     ports:
       - "9092:9092"
     volumes:
@@ -88,7 +88,7 @@ services:
     container_name: kafka.api
     hostname: rest-proxy
     labels:
-      - dev.orbstack.domains=api.kafka.${DOMAIN}
+      - dev.orbstack.domains=api.kafka.${DOMAIN},api.kafka.local
       - dev.orbstack.http-port=8082
     ports:
       - "8082:8082"
@@ -138,7 +138,7 @@ services:
     volumes:
       - redpandadata:/var/lib/redpanda/data
     labels:
-      - dev.orbstack.domains=redpanda.${DOMAIN}
+      - dev.orbstack.domains=redpanda.${DOMAIN},redpanda.local
     ports:
       - 9092:9092
       - 8081:8081
@@ -182,12 +182,14 @@ services:
         redpanda:
           adminApi:
             enabled: true
-            urls: ["http://redpanda-broker:9644"]
+            urls: ["http://redpanda.broker:9644"]
         EOF
         fi
 
         exec /app/console
     profiles: [redpanda]
+    labels:
+      - dev.orbstack.domains=console.redpanda.${DOMAIN},console.redpanda.local
     environment:
       TARGET: kafka
       CONFIG_FILEPATH: /tmp/config.yml
