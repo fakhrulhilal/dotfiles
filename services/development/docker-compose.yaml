@@ -34,6 +34,24 @@ services:
       timeout: 5s
       retries: 3
 
+  baget:
+    image: bagetter/bagetter:latest
+    container_name: baget
+    hostname: nuget
+    labels:
+      - dev.orbstack.domains=nuget.${DOMAIN}
+    volumes:
+      - bagetdata:/data
+    environment:
+      Storage__Type: FileSystem
+      Storage__Path: /data
+      Database__Type: Sqlite
+      Database__ConnectionString: "Data Source=/app/baget.db"
+      Search__Type: Database
+
+volumes:
+  bagetdata:
+
 networks:
   default:
     name: backend
