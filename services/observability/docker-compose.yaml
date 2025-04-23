@@ -69,7 +69,8 @@ services:
       ES_JAVA_OPTS: '-Xms2g -Xmx2g'
       bootstrap.memory_lock: true
     secrets:
-      - app_pwd
+      - source: app_pwd
+        mode: 0400
     healthcheck:
       test: ["CMD-SHELL", "curl -Is -u 'elastic:${APP_PASSWORD}' http://localhost:9200 | grep -q 'HTTP/1.1 200 OK'"]
       timeout: 3s
