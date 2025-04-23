@@ -9,6 +9,12 @@ services:
       - dev.orbstack.domains=mssql.${DOMAIN}
     ports:
       - "1433:1433"
+    healthcheck:
+      test: >
+        bash -c '$(find /opt -name sqlcmd) -S localhost -C -U sa -P "$$MSSQL_SA_PASSWORD" -Q "select 1"'
+      interval: 10s
+      timeout: 3s
+      retries: 2
     restart: unless-stopped
     volumes:
       - mssqldata:/var/opt/mssql
@@ -30,6 +36,11 @@ services:
       - dev.orbstack.domains=postgre.${DOMAIN}
     ports:
       - 5432:5432
+    healthcheck:
+      test: pg_isready -h localhost -p 5432
+      interval: 10s
+      timeout: 3s
+      retries: 2
     profiles: [sql]
     environment:
       - TZ=${TZ}
@@ -54,11 +65,18 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
     ports:
       - 27017:27017
+    healthcheck:
+      test: >
+        bash -c 'mongosh -u $$MONGO_INITDB_ROOT_USERNAME -p '$$MONGO_INITDB_ROOT_PASSWORD' --port 27017 --authenticationDatabase admin --eval "db.runCommand({ ping: 1})" | grep ok'
+      interval: 10s
+      timeout: 3s
+      retries: 2
     volumes:
       - mongodata:/data/db
 
   nosql-cosmos:
     image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    platform: linux/amd64
     container_name: db.cosmos
     hostname: azcosmos
     labels:
@@ -95,8 +113,6 @@ services:
     restart: unless-stopped
     command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
     profiles: [blob]
-    environment:
-      AZURITE_DB: "mssql://azure:azur3_services@mssqldb:1433/azurite"
 
 volumes:
   mssqldata:
