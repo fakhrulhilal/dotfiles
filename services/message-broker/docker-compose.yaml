@@ -10,9 +10,16 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
+    healthcheck:
+      test: >
+        (echo -e "GET /healthz HTTP/1.1\r\nHost: localhost\r\n\r\n"; sleep 0.1) | nc localhost 8222 | grep -q '"status":"ok"'
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
     volumes:
       - natsdata:/data
-    command: "-js --sd /data"
+    command: "-m 8222 -js --sd /data"
 
   kafka-keeper:
     image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
