@@ -1,3 +1,49 @@
+function service_rebuild() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: service_rebuild <service_name> <image_name>"
+        return 1
+    fi
+
+    local service_name="$1"
+    local image_name="$2"
+
+    docker compose rm "$service_name" -f;
+    docker rmi "$image_name" -f;
+    docker compose build "$service_name" --no-cache;
+}
+
+project_run() {
+    if [[ $# -lt 1 ]]; then
+        echo "Usage: project_run <project.csproj> [env_file1] [env_file2] ..."
+        return 1
+    fi
+
+    local csproj_file="$1"
+    shift
+
+    # Check if .csproj file exists
+    if [[ ! -f "$csproj_file" ]]; then
+        echo "Error: Project file '$csproj_file' not found"
+        return 1
+    fi
+
+    # Source each env file
+    for env_file in "$@"; do
+        if [[ -f "$env_file" ]]; then
+            echo "Sourcing $env_file..."
+            set -a  # automatically export all variables
+            source "$env_file"
+            set +a
+        else
+            echo "Warning: Environment file '$env_file' not found, skipping..."
+        fi
+    done
+
+    # Run the dotnet project
+    echo "Running dotnet project: $csproj_file"
+    dotnet run --project "$csproj_file"
+}
+
 function open_command() {
   local open_cmd
 
