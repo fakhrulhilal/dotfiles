@@ -13,7 +13,8 @@
     pager = delta
 
 [delta]
-    navigate = true
+    pager = less -+X -R
+    #navigate = true
     #true-color = always
 	features = unobtrusive-line-numbers decorations comparison
 	syntax-theme = Monokai Extended
