@@ -1,0 +1,29 @@
+[tools]
+"dotnet:aspire.cli" = "latest"
+"dotnet:apache.avro.tools" = "1.12.1"
+"dotnet:csharprepl" = "latest"
+"dotnet:dotnet-ef" = "8"
+"dotnet:yuniql.cli" = "latest"
+"dotnet:dotnet-reportgenerator-globaltool" = "latest"
+
+rust = "latest"
+"cargo:bat" = "latest"
+"cargo:git-delta" = "latest"
+
+node = "lts"
+"npm:@qwen-code/qwen-code" = "latest"
+
+deno = "latest"
+fd = "latest"
+fzf = "latest"
+gemini-cli = "latest"
+lsd = "latest"
+neovim = "latest"
+opencode = "latest"
+powershell = "latest"
+ripgrep = "latest"
+yq = "latest"
+bun = "latest"
+
+[settings]
+experimental = true
