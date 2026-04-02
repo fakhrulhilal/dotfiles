@@ -1,15 +1,7 @@
-# bun app
-[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$HOME/.local/bin:$HOME/.dotnet/tools:$BUN_INSTALL/bin:$PATH"
-export POSH_THEME="$DOT_HOME/config/posh-theme.omp.json"
-
-# node version manager
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
-
 # vim: set filetype=zsh:
+export DOTNET_ROOT="$HOME/.dotnet"
+export PATH="$HOME/.local/bin:$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+export POSH_THEME="$DOT_HOME/config/posh-theme.omp.json"
 
 # Added by OrbStack: command-line tools and integration
 # This won't be added again if you remove it.

@@ -1,15 +1,31 @@
-function service_rebuild() {
-    if [[ $# -lt 2 ]]; then
-        echo "Usage: service_rebuild <service_name> <image_name>"
-        return 1
-    fi
+dc () {
+	local compose_file="${COMPOSE_FILE:-$DEFAULT_COMPOSE_FILE}"
+	local compose_dir="$(dirname "$compose_file")"
+	local env_file="${ENV_FILE:-$compose_dir/.env}"
+	local project_dir="${PROJECT_DIR:-$compose_dir}"
+	local compose_cmd=(docker compose -f "$compose_file" --project-directory "$project_dir" --env-file "$env_file")
+	if [[ "$1" == "rebuild" && -n "$2" ]]
+	then
+		local service_name="$2"
+		local image_name="$3"
+		if [ -z $image_name ]
+		then
+			image_name=$("${compose_cmd[@]}" config | yq ".services[\"${service_name}\"].image")
+		fi
+		"${compose_cmd[@]}" stop "$service_name"
+		"${compose_cmd[@]}" rm "$service_name" -f
+		docker rmi "$image_name" -f
+		"${compose_cmd[@]}" build "$service_name" --no-cache
+	else
+		"${compose_cmd[@]}" "$@"
+	fi
+}
 
-    local service_name="$1"
-    local image_name="$2"
+alias uuid='uuidgen | tr "[:upper:]" "[:lower:]"'
 
-    docker compose rm "$service_name" -f;
-    docker rmi "$image_name" -f;
-    docker compose build "$service_name" --no-cache;
+function flush_dns() {
+    sudo killall -HUP mDNSResponder
+    echo 'mDNS cache flushed'
 }
 
 project_run() {
