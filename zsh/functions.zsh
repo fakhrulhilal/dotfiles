@@ -60,117 +60,221 @@ project_run() {
     dotnet run --project "$csproj_file"
 }
 
-function open_command() {
-  local open_cmd
+zmodload zsh/langinfo
 
-  # define the open command
-  case "$OSTYPE" in
-    darwin*)  open_cmd='open' ;;
-    cygwin*)  open_cmd='cygstart' ;;
-    linux*)   [[ "$(uname -r)" != *icrosoft* ]] && open_cmd='nohup xdg-open' || {
-                open_cmd='cmd.exe /c start ""'
-                [[ -e "$1" ]] && { 1="$(wslpath -w "${1:a}")" || return 1 }
-              } ;;
-    msys*)    open_cmd='start ""' ;;
-    *)        echo "Platform $OSTYPE not supported"
-              return 1
-              ;;
+_parse_checksum() {
+  local checksum="$1"
+  # format: md5:abc123, sha1:abc123, sha256:abc123
+  local algo="${checksum%%:*}"
+  local hash="${checksum##*:}"
+  echo "$algo $hash"
+}
+
+_validate_checksum() {
+  local file="$1"
+  local checksum="$2"
+
+  local algo hash
+  read -r algo hash <<< "$(_parse_checksum "$checksum")"
+
+  local actual
+  case "$algo" in
+    md5)    actual=$(md5 -q "$file") ;;
+    sha1)   actual=$(shasum -a 1 "$file" | awk '{print $1}') ;;
+    sha256) actual=$(shasum -a 256 "$file" | awk '{print $1}') ;;
+    *)
+      echo "⚠️  Unknown checksum algorithm: $algo, skipping validation"
+      return 0
+      ;;
   esac
 
-  # If a URL is passed, $BROWSER might be set to a local browser within SSH.
-  # See https://github.com/ohmyzsh/ohmyzsh/issues/11098
-  if [[ -n "$BROWSER" && "$1" = (http|https)://* ]]; then
-    "$BROWSER" "$@"
+  if [ "$actual" = "$hash" ]; then
+    echo "✅ Checksum valid ($algo)"
+    return 0
+  else
+    echo "❌ Checksum mismatch ($algo)"
+    echo "   expected: $hash"
+    echo "   actual:   $actual"
+    return 1
+  fi
+}
+
+url_decode() {
+  local encoded="${1//+/ }"
+  printf '%b' "$(echo "$encoded" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
+}
+
+_extract_filename() {
+  local url="$1"
+  local clean_url="${url%%\?*}"  # strip query params
+  basename "$(url_decode "$clean_url")"
+}
+
+_resolve_filename() {
+  local url="$1"
+
+  # Try Content-Disposition first
+  local header=$(curl -sIL "$url")
+  local disposition=$(echo $header | grep -i "content-disposition" | tail -1 | sed -E 's/.*filename="?([^";&]+)"?.*/\1/' | tr -d '\r')
+
+  if [ -n "$disposition" ]; then
+    _extract_filename "$disposition"
     return
   fi
 
-  ${=open_cmd} "$@" &>/dev/null
+  # Try location header (follow redirects, grab last location)
+  local location
+  location=$(curl -sI "$url" | grep -i "^location:" | tail -1 | awk '{print $2}' | tr -d '\r')
+
+  if [ -n "$location" ]; then
+    _extract_filename "$location"
+    return
+  fi
+
+  # Fallback to URL-based filename
+  _extract_filename "$url"
 }
 
-zmodload zsh/langinfo
+download_file() {
+  local url="$1"
+  local filename="${2:-$(_resolve_filename "$url")}"  # fallback to url filename if not provided
+  local output="$HOME/Downloads/$filename"
+  #local -n result=${@: -1}
 
-# URL-encode a string
-#
-# Encodes a string using RFC 2396 URL-encoding (%-escaped).
-# See: https://www.ietf.org/rfc/rfc2396.txt
-#
-# By default, reserved characters and unreserved "mark" characters are
-# not escaped by this function. This allows the common usage of passing
-# an entire URL in, and encoding just special characters in it, with
-# the expectation that reserved and mark characters are used appropriately.
-# The -r and -m options turn on escaping of the reserved and mark characters,
-# respectively, which allows arbitrary strings to be fully escaped for
-# embedding inside URLs, where reserved characters might be misinterpreted.
-#
-# Prints the encoded string on stdout.
-# Returns nonzero if encoding failed.
-#
-# Usage:
-#  omz_urlencode [-r] [-m] [-P] <string> [<string> ...]
-#
-#    -r causes reserved characters (;/?:@&=+$,) to be escaped
-#
-#    -m causes "mark" characters (_.!~*''()-) to be escaped
-#
-#    -P causes spaces to be encoded as '%20' instead of '+'
-function omz_urlencode() {
-  emulate -L zsh
-  local -a opts
-  zparseopts -D -E -a opts r m P
+  #echo "⬇️  Downloading $filename..."
+  curl -SL --progress-bar "$url" -o "$output"
 
-  local in_str="$@"
-  local url_str=""
-  local spaces_as_plus
-  if [[ -z $opts[(r)-P] ]]; then spaces_as_plus=1; fi
-  local str="$in_str"
+  #result="$output"  # return the path
+  echo "$output"
+}
 
-  # URLs must use UTF-8 encoding; convert str to UTF-8 if required
-  local encoding=$langinfo[CODESET]
-  local safe_encodings
-  safe_encodings=(UTF-8 utf8 US-ASCII)
-  if [[ -z ${safe_encodings[(r)$encoding]} ]]; then
-    str=$(echo -E "$str" | iconv -f $encoding -t UTF-8)
-    if [[ $? != 0 ]]; then
-      echo "Error converting string from $encoding to UTF-8" >&2
+install_font() {
+  local url="$1"
+  local font_dir
+  if [[ "$(uname)" == "Darwin" ]]; then
+    font_dir="$HOME/Library/Fonts"
+  else
+    font_dir="$HOME/.local/share/fonts"
+  fi
+  local font_path=$(download_file "$url")
+  local filename=$(_extract_filename "$font_path")
+  local font_name="${filename%.*}"
+  mkdir -p "$font_dir"
+
+  echo "🔠 Installing $font_dir..."
+  unzip -o "$font_path" -d "$font_dir"
+  fc-cache -f "$font_dir"
+
+  rm "$font_path"
+  echo "✅ $font_name Nerd Font installed"
+}
+
+install_mac_app() {
+  local url="$1"
+  local checksum="$2"
+
+  if [ -z "$url" ]; then
+    echo "⚠️  Missing url"
+    return 1
+  fi
+
+  local filename=$(_resolve_filename "$url")
+  local path="$HOME/Downloads/$filename"
+  # Check if already downloaded and checksum matches
+  if [ -f "$path" ] && [ -n "$checksum" ]; then
+    if _validate_checksum "$path" "$checksum"; then
+      echo "⏭️  Already downloaded and checksum matches, skipping download"
+    else
+      echo "⚠️  Already downloaded but checksum mismatch, re-downloading..."
+      rm -f "$path"
+      path=$(download_file "$url" "$filename")
+    fi
+  else
+    path=$(download_file "$url" "$filename")
+  fi
+
+  if [ ! -f "$path" ]; then
+    echo "❌ Download failed: $url"
+    return 1
+  fi
+
+  # Validate checksum if provided
+  if [ -n "$checksum" ]; then
+    if ! _validate_checksum "$path" "$checksum"; then
+      echo "⏭️  Skipping $url due to checksum mismatch"
+      rm -f "$path"
       return 1
     fi
   fi
 
-  # Use LC_CTYPE=C to process text byte-by-byte
-  # Note that this doesn't work in Termux, as it only has UTF-8 locale.
-  # Characters will be processed as UTF-8, which is fine for URLs.
-  local i byte ord LC_ALL=C
-  export LC_ALL
-  local reserved=';/?:@&=+$,'
-  local mark='_.!~*''()-'
-  local dont_escape="[A-Za-z0-9"
-  if [[ -z $opts[(r)-r] ]]; then
-    dont_escape+=$reserved
-  fi
-  # $mark must be last because of the "-"
-  if [[ -z $opts[(r)-m] ]]; then
-    dont_escape+=$mark
-  fi
-  dont_escape+="]"
+  local filename=$(basename "$path")
+  case "$filename" in
+    *.dmg) install_dmg "$path" ;;
+    *.pkg) install_pkg "$path" ;;
+    *.zip) install_zip "$path" ;;
+    *)   echo "⚠️  Unknown type: $filename, skipping" ;;
+  esac
+}
 
-  # Implemented to use a single printf call and avoid subshells in the loop,
-  # for performance (primarily on Windows).
-  local url_str=""
-  for (( i = 1; i <= ${#str}; ++i )); do
-    byte="$str[i]"
-    if [[ "$byte" =~ "$dont_escape" ]]; then
-      url_str+="$byte"
-    else
-      if [[ "$byte" == " " && -n $spaces_as_plus ]]; then
-        url_str+="+"
-      elif [[ "$PREFIX" = *com.termux* ]]; then
-        # Termux does not have non-UTF8 locales, so just send the UTF-8 character directly
-        url_str+="$byte"
-      else
-        ord=$(( [##16] #byte ))
-        url_str+="%$ord"
-      fi
-    fi
-  done
-  echo -E "$url_str"
+install_dmg() {
+  local dmg_path="$1"
+  local mount_point
+  mount_point=$(hdiutil attach "$dmg_path" | grep Volumes | awk '{print $3}')
+
+  # Handle .app inside dmg
+  local app=$(find "$mount_point" -name "*.app" -maxdepth 1 | head -1)
+
+  # Handle .pkg inside dmg
+  local pkg=$(find "$mount_point" -name "*.pkg" -maxdepth 1 | head -1)
+
+  if [ -n "$app" ]; then
+    cp -R "$app" ~/Applications/
+    echo "✅ Installed $(basename "$app") to ~/Applications"
+  elif [ -n "$pkg" ]; then
+    install_pkg_file "$pkg"
+  else
+    echo "❌ No .app or .pkg found in $(_extract_filename "$url"), skipping"
+  fi
+
+  hdiutil detach "$mount_point"
+  rm "$dmg_path"
+}
+
+install_pkg() {
+  local pkg_path="$1"
+
+  install_pkg_file "$pkg_path"
+  rm "$pkg_path"
+}
+
+install_pkg_file() {
+  local pkg_path="$1"
+  local filename="$(_extract_filename "$pkg_path")"
+
+  echo "📦 Installing $filename..."
+  if installer -pkg "$pkg_path" -target CurrentUserHomeDirectory 2>/dev/null; then
+    echo "✅ Installed $filename to user directory"
+  else
+    echo "❌ Failed to install $filename"
+  fi
+}
+
+install_zip() {
+  local zip_path="$1"
+  local filename=$(_extract_filename "$zip_path")
+
+  echo "📦 Extracting $filename..."
+  unzip -q "$zip_path" -d /tmp/zip_extracted
+
+  local app
+  app=$(find /tmp/zip_extracted -name "*.app" -maxdepth 2 | head -1)
+
+  if [ -n "$app" ]; then
+    cp -R "$app" ~/Applications/
+    echo "✅ Installed $(basename "$app") to ~/Applications"
+  else
+    echo "❌ No .app found in zip, skipping"
+  fi
+
+  rm -rf "$zip_path" /tmp/zip_extracted
 }

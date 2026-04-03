@@ -11,6 +11,8 @@
 
 [core]
     pager = delta
+    editor = vim
+    autocrlf = input
 
 [delta]
     pager = less -+X -R
@@ -30,7 +32,7 @@
 	zero-style = dim syntax
 	plus-non-emph-style = bold green
 	plus-emph-style = bold white green
-    
+
 [delta "unobtrusive-line-numbers"]
     line-numbers = true
     line-numbers-minus-style = "#444444"
@@ -51,15 +53,15 @@
     diffFilter = delta --color-only
 
 [difftool "delta"]
-	cmd = delta \"$LOCAL\" \"$REMOTE\" 
+	cmd = delta \"$LOCAL\" \"$REMOTE\"
 	renames = true
 
 [difftool "codecompare"]
-	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codecompare.exe' -W \"$LOCAL\" \"$REMOTE\" 
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codecompare.exe' -W \"$LOCAL\" \"$REMOTE\"
 	renames = true
 
 [mergetool "codecompare"]
-	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codemerge.exe' -MF \"$LOCAL\" -TF \"$REMOTE\" -BF \"$BASE\" -RF \"$MERGED\" 
+	cmd = 'C:\\Program Files\\Devart\\Code Compare\\codemerge.exe' -MF \"$LOCAL\" -TF \"$REMOTE\" -BF \"$BASE\" -RF \"$MERGED\"
 	trustExitCode = true
 
 [difftool "vsdiffmerge"]

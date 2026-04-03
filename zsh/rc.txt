@@ -18,10 +18,13 @@ plug "zsh-users/zsh-history-substring-search"
 plug "wintermi/zsh-oh-my-posh"
 
 # Load and initialise completion system
+fpath=(~/.local/share/zsh/completion $fpath)
+typeset -U fpath
 autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 unsetopt EXTENDED_GLOB
 
+eval "$(dotnet completions script zsh)"
 mise=$(which mise)
 eval "$($mise activate zsh)"
 eval "$(oh-my-posh init zsh --config $POSH_THEME)"

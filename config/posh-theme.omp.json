@@ -17,7 +17,7 @@
           "type": "session"
         },
         {
-          "foreground": "#fff",
+          "foreground": "#bbb",
           "properties": {
             "windows": "\ue62a"
           },
@@ -78,6 +78,7 @@
     },
     {
       "alignment": "right",
+      "newline": false,
       "segments": [
         {
           "foreground": "#14A5AE",
@@ -110,7 +111,7 @@
         {
           "type": "shell",
           "style": "plain",
-          "foreground": "#ffffff",
+          "foreground": "#bbb",
           "properties": {
             "mapped_shell_names": {
               "pwsh": "ps"
