@@ -1,4 +1,14 @@
 [tools]
+usage = "latest"
+
+# languages
+rust = "latest"
+node = "lts"
+deno = "latest"
+bun = "latest"
+python = "3.12"
+
+# .NET
 "dotnet:aspire.cli" = "latest"
 "dotnet:apache.avro.tools" = "1.12.1"
 "dotnet:csharprepl" = "latest"
@@ -6,24 +16,24 @@
 "dotnet:yuniql.cli" = "latest"
 "dotnet:dotnet-reportgenerator-globaltool" = "latest"
 
-rust = "latest"
-"cargo:bat" = "latest"
-"cargo:git-delta" = "latest"
-
-node = "lts"
-"npm:@qwen-code/qwen-code" = "latest"
-
-deno = "latest"
-fd = "latest"
-fzf = "latest"
-gemini-cli = "latest"
-lsd = "latest"
-neovim = "latest"
+# AI
 opencode = "latest"
+
+# shell
 powershell = "latest"
+lsd = "latest"
 ripgrep = "latest"
 yq = "latest"
-bun = "latest"
+"cargo:bat" = "latest"
+"cargo:git-delta" = "latest"
+fd = "latest"
+fzf = "latest"
+
+# editor
+neovim = "latest"
+
+# cloud
+"pipx:azure-cli" = "latest"
 
 [settings]
 experimental = true

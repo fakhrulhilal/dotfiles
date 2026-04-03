@@ -1,0 +1,31 @@
+# development
+https://github.com/usebruno/bruno/releases/download/v3.2.0/bruno_3.2.0_arm64_mac.dmg ; sha256:246470d4d569380c2b58e58d59522b4e7f425ba009190d6975e8795dcdea116e
+https://dl.pstmn.io/download/latest/osx_arm64
+https://release.files.ghostty.org/1.3.1/Ghostty.dmg
+https://download.jetbrains.com/rider/JetBrains.Rider-2026.1-aarch64.dmg
+https://download.jetbrains.com/resharper/dotUltimate.2026.1/JetBrains.dotMemory.macos-arm64.2026.1.dmg
+https://download.jetbrains.com/resharper/dotUltimate.2026.1/JetBrains.dotTrace.macos-arm64.2026.1.dmg
+https://github.com/zed-industries/zed/releases/download/v0.230.0/Zed-aarch64.dmg
+https://orbstack.dev/download/stable/latest/arm64
+https://code.visualstudio.com/sha/download?build=stable&os=darwin-arm64-dmg
+https://github.com/wakatime/macos-wakatime/releases/latest/download/macos-wakatime.zip
+
+# Communication
+https://statics.teams.cdn.office.net/production-osx/enterprise/webview2/lkg/MicrosoftTeams.pkg
+https://cdn.zoom.us/prod/6.7.7.76486/arm64/zoomusInstallerFull.pkg
+https://res.public.onecdn.static.microsoft/mro1cdnstorage/C1297A47-86C4-4C1F-97FA-950631F94777/MacAutoupdate/Microsoft_365_and_Office_16.107.26032814_Installer.pkg?culture=en-us&country=us
+https://discord.com/api/download?platform=osx
+
+# Productivity
+https://ardownload3.adobe.com/pub/adobe/acrobat/mac/AcrobatDC/2500121288/AcroRdrSCADC2500121288_MUI.dmg
+https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/1cd796c5-1fb3-4ff4-af7e-3f007d744e78/MicrosoftEdge-146.0.3856.97.dmg?platform=Mac&channel=Stable&brand=M101&_.%25%E2%80%8B=
+
+# AI
+https://downloads.claude.ai/releases/darwin/universal/1.569.0/Claude-49894ad878c985b0dd77178b75b353f11481ebf4.dmg
+https://m365copilotformac.blob.core.windows.net/releases/Microsoft_365_Copilot_universal_1.2603.1601_Installer.pkg
+
+# misc
+https://oneclient.sfx.ms/Mac/Installers/26.032.0217.0003/universal/OneDrive.pkg?culture=en-us&country=us
+https://releases.gpgtools.com/GPG_Suite-2023.3.dmg
+https://tunnelblick.net/iprelease/Tunnelblick_8.0.1_build_6301.dmg
+https://openvpn.net/downloads/openvpn-connect-v3-macos.dmg

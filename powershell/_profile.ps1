@@ -32,5 +32,7 @@ foreach ($Script in $Scripts) {
 foreach ($Module in @('posh-git')) {
     Import-Module $Module
 }
+
+dotnet completions script pwsh | Out-String | Invoke-Expression
 oh-my-posh init pwsh --config (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'posh-theme.omp.json')).FullName | Invoke-Expression
 $Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
