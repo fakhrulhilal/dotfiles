@@ -27,6 +27,8 @@ if [[ "$SHELL" == */zsh ]]; then
     ln -sfv "$ROOT_DIR/zsh/profile.txt" "$HOME/.zprofile"
     ln -sfv "$ROOT_DIR/zsh/rc.txt" "$HOME/.zshrc"
     cat >> "$HOME/.zshenv" <<EOF
+    
+# Added by dotfiles bootstrapper
 export DOT_HOME="$ROOT_DIR"
 export ZSH_EXT="\$DOT_HOME/zsh"
 EOF
