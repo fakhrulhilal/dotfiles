@@ -23,7 +23,7 @@ dc () {
 
 alias uuid='uuidgen | tr "[:upper:]" "[:lower:]"'
 
-function flush_dns() {
+flush_dns() {
     sudo killall -HUP mDNSResponder
     echo 'mDNS cache flushed'
 }
@@ -179,39 +179,39 @@ install_mac_app() {
   fi
 
   local filename=$(_resolve_filename "$url")
-  local path="$HOME/Downloads/$filename"
+  local filepath="$HOME/Downloads/$filename"
   # Check if already downloaded and checksum matches
-  if [ -f "$path" ] && [ -n "$checksum" ]; then
-    if _validate_checksum "$path" "$checksum"; then
+  if [ -f "$filepath" ] && [ -n "$checksum" ]; then
+    if _validate_checksum "$filepath" "$checksum"; then
       echo "⏭️  Already downloaded and checksum matches, skipping download"
     else
       echo "⚠️  Already downloaded but checksum mismatch, re-downloading..."
-      rm -f "$path"
-      path=$(download_file "$url" "$filename")
+      rm -f "$filepath"
+      filepath=$(download_file "$url" "$filename")
     fi
   else
-    path=$(download_file "$url" "$filename")
+    filepath=$(download_file "$url" "$filename")
   fi
 
-  if [ ! -f "$path" ]; then
+  if [ ! -f "$filepath" ]; then
     echo "❌ Download failed: $url"
     return 1
   fi
 
   # Validate checksum if provided
   if [ -n "$checksum" ]; then
-    if ! _validate_checksum "$path" "$checksum"; then
+    if ! _validate_checksum "$filepath" "$checksum"; then
       echo "⏭️  Skipping $url due to checksum mismatch"
-      rm -f "$path"
+      rm -f "$filepath"
       return 1
     fi
   fi
 
-  local filename=$(basename "$path")
+  local filename=$(basename "$filepath")
   case "$filename" in
-    *.dmg) install_dmg "$path" ;;
-    *.pkg) install_pkg "$path" ;;
-    *.zip) install_zip "$path" ;;
+    *.dmg) install_dmg "$filepath" ;;
+    *.pkg) install_pkg "$filepath" ;;
+    *.zip) install_zip "$filepath" ;;
     *)   echo "⚠️  Unknown type: $filename, skipping" ;;
   esac
 }
@@ -219,7 +219,7 @@ install_mac_app() {
 install_dmg() {
   local dmg_path="$1"
   local mount_point
-  mount_point=$(hdiutil attach "$dmg_path" | grep Volumes | awk '{print $3}')
+  mount_point=$(hdiutil attach "$dmg_path" | grep '/Volumes/' | sed 's|.*\(/Volumes/.*\)|\1|')
 
   # Handle .app inside dmg
   local app=$(find "$mount_point" -name "*.app" -maxdepth 1 | head -1)
@@ -229,6 +229,7 @@ install_dmg() {
 
   if [ -n "$app" ]; then
     cp -R "$app" ~/Applications/
+    xattr -rd com.apple.quarantine ~/Applications/"$(basename "$app")"
     echo "✅ Installed $(basename "$app") to ~/Applications"
   elif [ -n "$pkg" ]; then
     install_pkg_file "$pkg"

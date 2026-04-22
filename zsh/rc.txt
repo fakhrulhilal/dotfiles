@@ -9,7 +9,7 @@ export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_FALLBACK_LIBRARY_PATH
 [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh" ] && source "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh"
 plug "zsh-users/zsh-autosuggestions"
 plug "zap-zsh/supercharge"
-#plug "wintermi/zsh-lsd"
+plug "wintermi/zsh-lsd"
 #plug "zap-zsh/zap-prompt"
 plug "zsh-users/zsh-syntax-highlighting"
 plug "wintermi/zsh-brew"
@@ -21,7 +21,7 @@ plug "wintermi/zsh-oh-my-posh"
 fpath=(~/.local/share/zsh/completion $fpath)
 typeset -U fpath
 autoload -Uz compinit
-compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
+compinit -u -d "${ZDOTDIR:-$HOME}/.zcompdump"
 unsetopt EXTENDED_GLOB
 
 eval "$(dotnet completions script zsh)"

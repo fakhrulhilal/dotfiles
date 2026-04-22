@@ -6,7 +6,7 @@ rust = "latest"
 node = "lts"
 deno = "latest"
 bun = "latest"
-python = "3.12"
+python = { version = "3.12", postinstall = "pip install pipx" }
 
 # .NET
 "dotnet:aspire.cli" = "latest"
@@ -34,6 +34,7 @@ neovim = "latest"
 
 # cloud
 "pipx:azure-cli" = "latest"
+lazygit = "latest"
 
 [settings]
 experimental = true
