@@ -4,8 +4,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 mkdir -p "$HOME/.local/share/zsh/completion"
 
-ln -sfv "$ROOT_DIR/neo&vim/basic-rc.txt" "$HOME/.vimrc"
-ln -sfv "$ROOT_DIR/neo&vim/basic-rc.txt" "$HOME/.ideavimrc"
+relink() {
+    local source="$1"
+    local target="$2"
+    
+    if [ -f "$target" ]; then
+        mv "$target" "${target}.bak"
+    fi 
+    ln -sf "$source" "$target"
+}
+
+relink "$ROOT_DIR/neo&vim/basic-rc.txt" "$HOME/.vimrc"
+relink "$ROOT_DIR/neo&vim/basic-rc.txt" "$HOME/.ideavimrc"
 
 DOTNET_VERSIONS=(6 8 10)
 DOTNET_INSTALL_SCRIPT="/tmp/dotnet-install.sh"
@@ -24,8 +34,8 @@ else
 fi
 
 if [[ "$SHELL" == */zsh ]]; then
-    ln -sfv "$ROOT_DIR/zsh/profile.txt" "$HOME/.zprofile"
-    ln -sfv "$ROOT_DIR/zsh/rc.txt" "$HOME/.zshrc"
+    relink "$ROOT_DIR/zsh/profile.txt" "$HOME/.zprofile"
+    relink "$ROOT_DIR/zsh/rc.txt" "$HOME/.zshrc"
     cat >> "$HOME/.zshenv" <<EOF
     
 # Added by dotfiles bootstrapper
@@ -66,6 +76,21 @@ if ! grep -q "^\[include\]" "$GITCONFIG"; then
 EOF
 fi
 
+case "$(uname -s)" in
+  Darwin)
+    mkdir -p "$HOME/Library/Application Support/lazygit"
+    relink "$DOT_HOME/config/lazygit.yml" "$HOME/Library/Application Support/lazygit/config.yml"
+    ;;
+  Linux)
+    mkdir -p "$HOME/.config/lazygit/config.yml"
+    relink "$DOT_HOME/config/lazygit.yml" "$HOME/.config/lazygit/config.yml"
+    ;;
+  *)
+    echo "Unsupported OS"
+    ;;
+esac
+
+exit 0
 # Guard: macOS only
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "⏭️  Not macOS, skipping DMG installs"

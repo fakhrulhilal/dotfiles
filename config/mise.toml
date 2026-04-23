@@ -1,5 +1,5 @@
 [tools]
-usage = "latest"
+usage = "3.2.0"
 
 # languages
 rust = "latest"
@@ -35,6 +35,7 @@ neovim = "latest"
 # cloud
 "pipx:azure-cli" = "latest"
 lazygit = "latest"
+"cargo:viddy" = "latest"
 
 [settings]
 experimental = true

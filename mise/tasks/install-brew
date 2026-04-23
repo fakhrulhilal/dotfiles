@@ -1,4 +1,0 @@
-#!/bin/bash
-# description: Install Homebrew packages from Brewfile
-
-brew bundle --file=Brewfile
