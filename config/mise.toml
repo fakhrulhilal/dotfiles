@@ -3,6 +3,8 @@ usage = "3.2.0"
 
 # languages
 rust = "latest"
+cargo-binstall = "latest"
+go = "latest"
 node = "lts"
 deno = "latest"
 bun = "latest"
@@ -18,24 +20,33 @@ python = { version = "3.12", postinstall = "pip install pipx" }
 
 # AI
 opencode = "latest"
+"npm:@github/copilot" = "latest"
+claude-code = "latest"
+gemini-cli = "latest"
 
 # shell
 powershell = "latest"
-lsd = "latest"
-ripgrep = "latest"
-yq = "latest"
-"cargo:bat" = "latest"
-"cargo:git-delta" = "latest"
-fd = "latest"
+lsd = "latest" # ls alternative
+ripgrep = "latest" # grep alternative
+yq = "latest" # jq with yaml support
+"cargo:bat" = { version = "latest", depends = "rust" } # cat alternative
+"cargo:git-delta" = { version = "latest", depends = "rust" } # diff viewer
+fd = "latest" # find alternative
 fzf = "latest"
+"cargo:viddy" = { version = "latest", depends = "rust" } # watch alternative
+"cargo:rgx-cli" = { version = "latest", depends = "rust", features = "pcre2-engine", postinstall = "rgx --completions zsh > {{ env.HOME }}/.local/share/zsh/completion/_rgx" } # regex helper
+"cargo:darya" = { version = "latest", depends = "rust" } # disk usage analysis
 
-# editor
+# software development
 neovim = "latest"
+lazygit = "latest" # GIT client
+"github:cube2222/octosql" = "latest" # explore csv, yaml, json using SQL query or event DB
 
 # cloud
-"pipx:azure-cli" = "latest"
-lazygit = "latest"
-"cargo:viddy" = "latest"
+"pipx:azure-cli" = { version = "latest", depends = "python" }
 
 [settings]
 experimental = true
+
+[settings.cargo]
+binstall = true
