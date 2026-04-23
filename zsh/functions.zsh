@@ -1,9 +1,10 @@
 dc () {
+  local compose_dir, compose_cmd
 	local compose_file="${COMPOSE_FILE:-$DEFAULT_COMPOSE_FILE}"
-	local compose_dir="$(dirname "$compose_file")"
+	compose_dir="$(dirname "$compose_file")"
 	local env_file="${ENV_FILE:-$compose_dir/.env}"
 	local project_dir="${PROJECT_DIR:-$compose_dir}"
-	local compose_cmd=(docker compose -f "$compose_file" --project-directory "$project_dir" --env-file "$env_file")
+	compose_cmd=(docker compose -f "$compose_file" --project-directory "$project_dir" --env-file "$env_file")
 	if [[ "$1" == "rebuild" && -n "$2" ]]
 	then
 		local service_name="$2"
@@ -114,8 +115,9 @@ _resolve_filename() {
   local url="$1"
 
   # Try Content-Disposition first
-  local header=$(curl -sIL "$url")
-  local disposition=$(echo $header | grep -i "content-disposition" | tail -1 | sed -E 's/.*filename="?([^";&]+)"?.*/\1/' | tr -d '\r')
+  local header, disposition
+  header=$(curl -sIL "$url")
+  disposition=$(echo "$header" | grep -i "content-disposition" | tail -1 | sed -E 's/.*filename="?([^";&]+)"?.*/\1/' | tr -d '\r')
 
   if [ -n "$disposition" ]; then
     _extract_filename "$disposition"
@@ -156,17 +158,22 @@ install_font() {
   else
     font_dir="$HOME/.local/share/fonts"
   fi
-  local font_path=$(download_file "$url")
-  local filename=$(_extract_filename "$font_path")
+  local font_path, filename
+  font_path=$(download_file "$url")
+  filename=$(_extract_filename "$font_path")
   local font_name="${filename%.*}"
   mkdir -p "$font_dir"
 
-  echo "🔠 Installing $font_dir..."
-  unzip -o "$font_path" -d "$font_dir"
-  fc-cache -f "$font_dir"
+  echo "🔠 Installing $font_name to $font_dir..."
+  unzip -q -o "$font_path" -d "$font_dir"
+  if command -v fc-cache &>/dev/null; then
+    fc-cache -f "$font_dir"
+  else
+    echo "You might need to relogin for font to take effect"
+  fi
 
-  rm "$font_path"
-  echo "✅ $font_name Nerd Font installed"
+  rm -rf "$font_path"
+  echo "✅ $font_name installed"
 }
 
 install_mac_app() {
@@ -178,7 +185,8 @@ install_mac_app() {
     return 1
   fi
 
-  local filename=$(_resolve_filename "$url")
+  local filename
+  filename=$(_resolve_filename "$url")
   local filepath="$HOME/Downloads/$filename"
   # Check if already downloaded and checksum matches
   if [ -f "$filepath" ] && [ -n "$checksum" ]; then
@@ -207,7 +215,7 @@ install_mac_app() {
     fi
   fi
 
-  local filename=$(basename "$filepath")
+  filename=$(basename "$filepath")
   case "$filename" in
     *.dmg) install_dmg "$filepath" ;;
     *.pkg) install_pkg "$filepath" ;;
@@ -217,15 +225,16 @@ install_mac_app() {
 }
 
 install_dmg() {
+  local app, pkg
   local dmg_path="$1"
   local mount_point
   mount_point=$(hdiutil attach "$dmg_path" | grep '/Volumes/' | sed 's|.*\(/Volumes/.*\)|\1|')
 
   # Handle .app inside dmg
-  local app=$(find "$mount_point" -name "*.app" -maxdepth 1 | head -1)
+  app=$(find "$mount_point" -name "*.app" -maxdepth 1 | head -1)
 
   # Handle .pkg inside dmg
-  local pkg=$(find "$mount_point" -name "*.pkg" -maxdepth 1 | head -1)
+  pkg=$(find "$mount_point" -name "*.pkg" -maxdepth 1 | head -1)
 
   if [ -n "$app" ]; then
     cp -R "$app" ~/Applications/
@@ -249,8 +258,9 @@ install_pkg() {
 }
 
 install_pkg_file() {
+  local filename
   local pkg_path="$1"
-  local filename="$(_extract_filename "$pkg_path")"
+  filename="$(_extract_filename "$pkg_path")"
 
   echo "📦 Installing $filename..."
   if installer -pkg "$pkg_path" -target CurrentUserHomeDirectory 2>/dev/null; then
