@@ -34,8 +34,24 @@ yq = "latest" # jq with yaml support
 fd = "latest" # find alternative
 fzf = "latest"
 "cargo:viddy" = { version = "latest", depends = "rust" } # watch alternative
-"cargo:rgx-cli" = { version = "latest", depends = "rust", features = "pcre2-engine", postinstall = "rgx --completions zsh > {{ env.HOME }}/.local/share/zsh/completion/_rgx" } # regex helper
+"cargo:rgx-cli" = {
+    version = "latest",
+    depends = "rust",
+    features = "pcre2-engine",
+    postinstall = "rgx --completions zsh > {{ get_env(name='HOME', default='') }}/.local/share/zsh/completion/_rgx"
+} # regex helper
 "cargo:darya" = { version = "latest", depends = "rust" } # disk usage analysis
+"github:facebook/zstd" = {
+    version = "latest",
+    asset_pattern = "zstd-{{ version }}.tar.gz",
+    bin_path = "zstd-{{ version }}/programs",
+    filter_bins = "zstdless,zstdgrep",
+    postinstall = '''
+        target_dir="$MISE_TOOL_INSTALL_PATH/zstd-$MISE_TOOL_VERSION"
+        make -C "$target_dir"
+        ln -sv "$target_dir/programs/zstd" "$MISE_TOOL_INSTALL_PATH/.mise-bins"
+    '''
+}
 
 # software development
 neovim = "latest"
@@ -44,6 +60,7 @@ lazygit = "latest" # GIT client
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
+"cargo:csvlens" = "latest"
 
 [settings]
 experimental = true

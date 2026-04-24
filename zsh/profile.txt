@@ -1,6 +1,6 @@
 # vim: set filetype=zsh:
 export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$HOME/.local/bin:$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 export POSH_THEME="$DOT_HOME/config/posh-theme.omp.json"
 
 # Added by OrbStack: command-line tools and integration
