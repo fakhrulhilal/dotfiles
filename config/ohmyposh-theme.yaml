@@ -1,0 +1,91 @@
+$schema: https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
+blocks:
+  - alignment: left
+    segments:
+      - foreground: '#21c7a8'
+        style: plain
+        template: '╭─ '
+        type: text
+      - style: plain
+        foreground: green
+        template: '{{ .UserName }}'
+        type: session
+      - foreground: '#bbb'
+        properties:
+          windows: 
+        style: plain
+        template: ' {{ if .WSL }}WSL at {{ end }}{{.Icon}} '
+        type: os
+      - style: plain
+        foreground: green
+        template: '{{ .HostName }}'
+        type: session
+      - type: project
+        alias: Project
+        style: powerline
+        foreground: '#0CA0D8'
+        template: '{{ if .Name }} {{ .Name }}{{ end }}{{ if .Version }}  {{.Version}}{{ end }}'
+      - foreground: '#0CA0D8'
+        properties:
+          folder_separator_icon: /
+          style: full
+        style: plain
+        template: '{{ if .Segments.Project.Name }}{{ else }}  {{ .Path }}{{ end }}'
+        type: path
+      - foreground: '#14A5AE'
+        foreground_templates:
+          - '{{ if or (.Working.Changed) (.Staging.Changed) }}#FF9248{{ end }}'
+          - '{{ if and (gt .Ahead 0) (gt .Behind 0) }}#ff4500{{ end }}'
+          - '{{ if gt .Ahead 0 }}#B388FF{{ end }}'
+          - '{{ if gt .Behind 0 }}#B388FF{{ end }}'
+        powerline_symbol: 
+        properties:
+          branch_max_length: 25
+          fetch_stash_count: true
+          fetch_status: true
+          fetch_upstream_icon: true
+        style: plain
+        template: ' {{ .UpstreamIcon }}  {{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }}  {{ .Working.String }}{{ end }}{{ if and (.Working.Changed) (.Staging.Changed) }} |{{ end }}{{ if .Staging.Changed }}  {{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }}  {{ .StashCount }}{{ end }}'
+        type: git
+      - type: dotnet
+        style: plain
+        foreground: '#14A5AE'
+        template: " \U000F0AAE {{ .Major }}"
+    type: prompt
+  - alignment: right
+    newline: false
+    segments:
+      - foreground: '#14A5AE'
+        properties:
+          always_enabled: true
+        style: plain
+        template: '{{ .FormattedMs }}'
+        type: executiontime
+      - foreground: '#45F1C2'
+        style: plain
+        template: '  {{ .CurrentDate | date .Format }} '
+        type: time
+    type: prompt
+  - alignment: left
+    newline: true
+    segments:
+      - foreground: '#21c7a8'
+        style: plain
+        template: ╰─
+        type: text
+      - type: shell
+        style: plain
+        foreground: '#bbb'
+        properties:
+          mapped_shell_names:
+            pwsh: ps
+      - foreground: '#cd5e42'
+        style: plain
+        template: '⚡ '
+        type: root
+      - foreground: '#45F1C2'
+        style: plain
+        template: '❯ '
+        type: text
+    type: prompt
+version: 3
