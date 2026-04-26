@@ -73,6 +73,7 @@ if ! command -v oh-my-posh &>/dev/null; then
     curl -s https://ohmyposh.dev/install.sh | bash -s
 fi
 
+GITCONFIG=${GITCONFIG:-$HOME/.gitconfig}
 if ! grep -q "^\[include\]" "$GITCONFIG"; then
   cat >> "$HOME/.gitconfig" <<EOF
 
@@ -98,7 +99,6 @@ case "$(uname -s)" in
     ;;
 esac
 
-exit 0
 # Guard: macOS only
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "⏭️  Not macOS, skipping DMG installs"

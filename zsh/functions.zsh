@@ -1,5 +1,5 @@
 dc () {
-  local compose_dir, compose_cmd
+  local compose_dir compose_cmd
 	local compose_file="${COMPOSE_FILE:-$DEFAULT_COMPOSE_FILE}"
 	compose_dir="$(dirname "$compose_file")"
 	local env_file="${ENV_FILE:-$compose_dir/.env}"
@@ -115,7 +115,7 @@ _resolve_filename() {
   local url="$1"
 
   # Try Content-Disposition first
-  local header, disposition
+  local header disposition
   header=$(curl -sIL "$url")
   disposition=$(echo "$header" | grep -i "content-disposition" | tail -1 | sed -E 's/.*filename="?([^";&]+)"?.*/\1/' | tr -d '\r')
 
@@ -158,7 +158,7 @@ install_font() {
   else
     font_dir="$HOME/.local/share/fonts"
   fi
-  local font_path, filename
+  local font_path filename
   font_path=$(download_file "$url")
   filename=$(_extract_filename "$font_path")
   local font_name="${filename%.*}"
@@ -225,7 +225,7 @@ install_mac_app() {
 }
 
 install_dmg() {
-  local app, pkg
+  local app pkg
   local dmg_path="$1"
   local mount_point
   mount_point=$(hdiutil attach "$dmg_path" | grep '/Volumes/' | sed 's|.*\(/Volumes/.*\)|\1|')
