@@ -78,7 +78,8 @@ blocks:
         foreground: '#bbb'
         properties:
           mapped_shell_names:
-            pwsh: ps
+            pwsh: ''
+            bash: ''
       - foreground: '#cd5e42'
         style: plain
         template: '⚡ '

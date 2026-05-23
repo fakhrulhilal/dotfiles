@@ -1,6 +1,0 @@
-brew "microsoft-edge"
-brew "orbstack"
-brew --cask "ghostty"
-brew "font-caskaydia-cove-nerd-font"
-brew "bruno"
-brew "neofetch"

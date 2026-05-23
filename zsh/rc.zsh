@@ -1,5 +1,5 @@
 # vim: set filetype=zsh:
-
+[ -z "$DOT_HOME" ] && export DOT_HOME="$(dirname $(dirname "$(realpath "$0")"))"
 export DYLD_FALLBACK_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_FALLBACK_LIBRARY_PATH"
 
 [ -f "$ZSH_EXT/variables.zsh" ] && source "$ZSH_EXT/variables.zsh"
@@ -23,8 +23,8 @@ typeset -U fpath
 autoload -Uz compinit
 compinit -u -d "${ZDOTDIR:-$HOME}/.zcompdump"
 unsetopt EXTENDED_GLOB
-
 eval "$(dotnet completions script zsh)"
-mise=$(which mise)
-eval "$($mise activate zsh --shims)"
+eval "$(mise activate zsh --shims)"
 eval "$(oh-my-posh init zsh --config $POSH_THEME)"
+
+[ -f "$DOT_HOME/shell/rc.sh" ] && source "$DOT_HOME/shell/rc.sh"
