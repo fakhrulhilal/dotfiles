@@ -2,7 +2,7 @@ relink() {
     local source="$1"
     local target="$2"
 
-    if [ -f "$target" ] && [ "$(realpath "$source")" == "$(realpath "$target")" ]; then
+    if [ -f "$target" ] && [ "$(realpath "$source")" = "$(realpath "$target")" ]; then
         return
     fi
 
@@ -19,7 +19,7 @@ dc () {
 	local env_file="${ENV_FILE:-$compose_dir/.env}"
 	local project_dir="${PROJECT_DIR:-$compose_dir}"
 	compose_cmd=(docker compose -f "$compose_file" --project-directory "$project_dir" --env-file "$env_file")
-	if [[ "$1" == "rebuild" && -n "$2" ]]
+	if [[ "$1" = "rebuild" && -n "$2" ]]
 	then
 		local service_name="$2"
 		local image_name="$3"
@@ -164,7 +164,7 @@ url_decode() {
 install_font() {
   local url="$1"
   local font_dir
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [[ "$(uname)" = "Darwin" ]]; then
     font_dir="$HOME/Library/Fonts"
   else
     font_dir="$HOME/.local/share/fonts"

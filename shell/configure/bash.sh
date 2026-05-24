@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 if [ -z "$BASH_VERSION" ]; then
     return
 fi
@@ -11,3 +13,5 @@ cat >> "$HOME/.env" <<EOF
 export DOT_HOME="$DOT_HOME"
 export BASH_EXT="\$DOT_HOME/bash"
 EOF
+
+source "$rc_file"
