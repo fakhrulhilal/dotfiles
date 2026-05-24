@@ -1,5 +1,10 @@
 # Guard: macOS only
-if [[ "$(uname)" != "Darwin" ]] || [ -n "$SKIP_INSTALL_MAC_APPS" ]; then
+if [ -n "$SKIP_INSTALL_MAC_APPS" ]; then
+    echo "⏭️  Skipping DMG installs as requested"
+    exit 0
+fi
+
+if [[ "$(uname)" != "Darwin" ]]; then
   echo "⏭️  Not macOS, skipping DMG installs"
   exit 0
 fi
@@ -13,7 +18,7 @@ fi
 mkdir -p ~/Applications
 source "$DOT_HOME/zsh/functions.zsh"
 while IFS= read -r line || [ -n "$line" ]; do
-  [[ -z "$line" || "$line" == \#* ]] && continue
+  [[ -z "$line" || "$line" = \#* ]] && continue
 
   # Parse ';' separated fields
   url=$(echo "$line"      | cut -d';' -f1 | xargs)

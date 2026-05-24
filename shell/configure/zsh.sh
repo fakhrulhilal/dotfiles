@@ -1,3 +1,5 @@
+#!/usr/bin/env zsh
+
 if [ -z "$ZSH_VERSION" ]; then
     return
 fi
@@ -19,6 +21,7 @@ if [[ ! -f "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh" ]]; then
     echo "✅ zap-zsh installed"
 fi
 
+source "$rc_file"
 echo "Configuring zsh"
 completion_dir="$HOME/.local/share/zsh/completion"
 mkdir -p "$completion_dir"

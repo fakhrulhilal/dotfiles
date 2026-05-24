@@ -23,8 +23,5 @@ typeset -U fpath
 autoload -Uz compinit
 compinit -u -d "${ZDOTDIR:-$HOME}/.zcompdump"
 unsetopt EXTENDED_GLOB
-eval "$(dotnet completions script zsh)"
-eval "$(mise activate zsh --shims)"
-eval "$(oh-my-posh init zsh --config $POSH_THEME)"
 
 [ -f "$DOT_HOME/shell/rc.sh" ] && source "$DOT_HOME/shell/rc.sh"

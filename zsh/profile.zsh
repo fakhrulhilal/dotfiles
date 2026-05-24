@@ -2,7 +2,6 @@
 [ -z "$DOT_HOME" ] && export DOT_HOME="$(dirname $(dirname "$(realpath "$0")"))"
 export DOTNET_ROOT="$HOME/.dotnet"
 export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
-export POSH_THEME="$DOT_HOME/config/ohmyposh-theme.yaml"
 
 # Added by OrbStack: command-line tools and integration
 # This won't be added again if you remove it.
