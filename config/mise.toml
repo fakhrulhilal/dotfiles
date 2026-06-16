@@ -6,7 +6,17 @@ rust = "latest"
 cargo-binstall = "latest"
 go = "latest"
 node = "lts"
-deno = "latest"
+deno = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            deno completions zsh > "$HOME/.local/share/zsh/completion/_deno"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            deno completions bash > "$HOME/.local/share/bash-completion/completions/deno"
+        fi
+        '''
+}
 bun = "latest"
 python = { version = "3.12", postinstall = "pip install pipx" }
 
@@ -38,7 +48,14 @@ fzf = "latest"
     version = "latest",
     depends = "rust",
     features = "pcre2-engine",
-    postinstall = "rgx --completions zsh > {{ get_env(name='HOME', default='') }}/.local/share/zsh/completion/_rgx"
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            rgx --completions zsh > "$HOME/.local/share/zsh/completion/_rgx"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            rgx --completions bash > "$HOME/.local/share/bash-completion/completions/rgx"
+        fi
+        '''
 } # regex helper
 "cargo:darya" = { version = "latest", depends = "rust" } # disk usage analysis
 "github:facebook/zstd" = {
@@ -50,13 +67,24 @@ fzf = "latest"
         target_dir="$MISE_TOOL_INSTALL_PATH/zstd-$MISE_TOOL_VERSION"
         make -C "$target_dir"
         ln -sv "$target_dir/programs/zstd" "$MISE_TOOL_INSTALL_PATH/.mise-bins"
-    '''
+        '''
 }
 
 # software development
 neovim = "latest"
 lazygit = "latest" # GIT client
 "github:cube2222/octosql" = "latest" # explore csv, yaml, json using SQL query or event DB
+fnox = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            fnox completion zsh > "$HOME/.local/share/zsh/completion/_fnox"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            fnox completion bash > "$HOME/.local/share/bash-completion/completions/fnox"
+        fi
+        '''
+}
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }

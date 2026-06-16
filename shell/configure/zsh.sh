@@ -4,7 +4,6 @@ if [ -z "$ZSH_VERSION" ]; then
     return
 fi
 
-mkdir -p "$HOME/.local/share/zsh/completion"
 rc_file="$HOME/.zshrc"
 relink "$DOT_HOME/zsh/profile.zsh" "$HOME/.zprofile"
 relink "$DOT_HOME/zsh/rc.zsh" "$rc_file"
@@ -26,4 +25,23 @@ echo "Configuring zsh"
 completion_dir="$HOME/.local/share/zsh/completion"
 mkdir -p "$completion_dir"
 mise completion zsh > "$completion_dir/_mise"
-deno completions zsh > "$completion_dir/_deno"
+cat > "$completion_dir/_dotnet" <<<'EOF'
+# zsh parameter completion for the dotnet CLI
+
+_dotnet_zsh_complete()
+{
+  local completions=("$(dotnet complete "$words")")
+
+  # If the completion list is empty, just continue with filename selection
+  if [ -z "$completions" ]
+  then
+    _arguments '*::arguments: _normal'
+    return
+  fi
+
+  # This is not a variable assignment, don't remove spaces!
+  _values = "${(ps:\n:)completions}"
+}
+
+compdef _dotnet_zsh_complete dotnet
+EOF
