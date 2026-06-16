@@ -29,6 +29,7 @@ case "$CURRENT_SHELL" in
     *) echo "No support for Posix shell at the moment" ;;
 esac
 
+source "$DOT_HOME/shell/configure/secret.sh"
 source "$DOT_HOME/shell/configure/macos.sh"
 source "$DOT_HOME/shell/configure/linux.sh"
 
