@@ -1,3 +1,24 @@
+set_export_variable() {
+    var_name=$1
+    var_value=$2
+    shell_config=$3
+
+    tmp_file="$shell_config.tmp"
+
+    if [ -f "$shell_config" ]; then
+        if grep -q "^export $var_name=" "$shell_config"; then
+            # POSIX-safe in-place edit
+            sed "s|^export $var_name=.*|export $var_name=\"$var_value\"|" \
+                "$shell_config" > "$tmp_file" &&
+            mv "$tmp_file" "$shell_config"
+        else
+            printf 'export %s="%s"\n' "$var_name" "$var_value" >> "$shell_config"
+        fi
+    else
+        printf 'export %s="%s"\n' "$var_name" "$var_value" > "$shell_config"
+    fi
+}
+
 relink() {
     local source="$1"
     local target="$2"

@@ -85,6 +85,7 @@ fnox = {
         fi
         '''
 }
+age = "latest"
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
