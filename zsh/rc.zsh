@@ -18,7 +18,7 @@ plug "zsh-users/zsh-history-substring-search"
 plug "wintermi/zsh-oh-my-posh"
 
 # Load and initialise completion system
-fpath=(~/.local/share/zsh/completion $fpath)
+fpath=($HOME/.local/share/zsh/completion $fpath)
 typeset -U fpath
 autoload -Uz compinit
 compinit -u -d "${ZDOTDIR:-$HOME}/.zcompdump"

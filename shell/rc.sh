@@ -5,7 +5,7 @@ elif [ -n "$ZSH_VERSION" ]; then
     shell_name="zsh"
 fi
 export POSH_THEME="$DOT_HOME/config/ohmyposh-theme.yaml"
-eval "$(dotnet completions script $shell_name)"
 eval "$(mise activate $shell_name --shims)"
 eval "$(oh-my-posh init $shell_name --config $POSH_THEME)"
+eval "$(fnox activate $shell_name)"
 unset shell_name
