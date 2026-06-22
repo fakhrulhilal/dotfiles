@@ -1,4 +1,4 @@
-# shell
+# dotfiles manager
 
 My personal shell experience
 
@@ -50,8 +50,14 @@ My personal shell experience
     10. GPG suite
     11. VPN: Tunnelblick, OpenVPN
     12. OneDrive
+12. Using [fnox](https://fnox.jdx.dev/) as secret manager
 
 ## Installation
+
+> ### TLDR
+> 
+> Configure on fresh MacOS: `zsh shell/bootstrap.sh`<br />
+> Configure on fresh linux: `bash shell/bootstrap.sh`
 
 To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardless the value).
 
@@ -84,3 +90,4 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
    1. [shell/aliases.sh](shell/aliases.sh) across posix shells
    2. [zsh/aliases.zsh](zsh/aliases.zsh) for zsh only
    3. [bash/aliases.sh](bash/aliases.sh) for bash only
+6. It will automatically create secret manager folder on `$HOME/.secret`. Push it on the same git repo user under name _secret_, such as git@github.com:my_user/secret.git. Then it should be easy for next machine setup.
