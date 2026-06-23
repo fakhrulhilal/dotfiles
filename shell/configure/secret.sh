@@ -22,7 +22,7 @@ if [ ! -d "$secret_dir" ]; then
         git clone "$secret_git_repo" "$secret_dir"
     else
         echo "Skip configuring secret as no source found"
-        exit 404
+        exit 4
     fi
 fi
 
@@ -48,8 +48,6 @@ fi
 
 relink "$secret_dir/fnox.toml" "$config_dir/config.toml"
 relink "$config_dir/age.txt" "$HOME/.config/mise/age.txt"
-set_export_variable "FNOX_AGE_KEY" "$SECRET_KEY" "$HOME/.zshenv"
-set_export_variable "FNOX_AGE_KEY" "$SECRET_KEY" "$HOME/.env"
 
 if [ -f "$secret_dir/bootstrap.sh" ]; then
     . "$secret_dir/bootstrap.sh"
