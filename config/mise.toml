@@ -96,3 +96,17 @@ experimental = true
 
 [settings.cargo]
 binstall = true
+
+[bootstrap.macos.trackpad]
+tap_to_click = true
+three_finger_drag = true
+
+[bootstrap.macos.finder]
+show_pathbar = true
+preferred_view_style = "icon"
+
+[bootstrap.macos.dock]
+autohide = true
+orientation = "bottom"
+magnification = true
+largesize = 100

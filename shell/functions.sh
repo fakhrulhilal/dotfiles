@@ -207,3 +207,6 @@ install_font() {
   rm -rf "$font_path"
   echo "✅ $font_name installed"
 }
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+. "$script_dir/functions.macos.sh"
