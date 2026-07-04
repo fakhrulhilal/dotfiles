@@ -3,14 +3,14 @@ import { Guard } from "./language";
 /**
  * HTTP auth strategy
  */
-export interface AuthStrategy {
+export interface Auth {
     getAuthHeader(): Promise<string | null>;
 }
 
 /**
  * Bearer token auth strategy. Also covers JWT — a JWT is just a bearer token.
  */
-export class BearerAuth implements AuthStrategy {
+export class BearerAuth implements Auth {
     constructor(private token: string | (() => string | Promise<string>)) {
     }
 
@@ -23,7 +23,7 @@ export class BearerAuth implements AuthStrategy {
 /**
  * Basic auth strategy.
  */
-export class BasicAuth implements AuthStrategy {
+export class BasicAuth implements Auth {
     constructor(private username: string, private password: string) {
     }
 
@@ -40,7 +40,7 @@ export class BasicAuth implements AuthStrategy {
 /**
  * OIDC client-credentials flow, with token caching + auto-refresh.
  */
-export class OidcClientCredentialsAuth implements AuthStrategy {
+export class OidcClientCredentialsAuth implements Auth {
     private accessToken?: string;
     private expiresAt = 0;
 
@@ -118,15 +118,30 @@ export interface RequestOptions {
 export class HttpClient {
     constructor(
         private baseUrl: string,
-        private auth?: AuthStrategy,
+        private auth?: Auth,
         private defaultHeaders: Record<string, HeaderValue> = {}
     ) {
     }
 
+    /**
+     * Call HTTP GET request and parse the JSON response
+     * @param path Path relative to the base URL
+     * @param options Optional request options
+     * @param guard An optional guard function to validate the response shape.
+     * @returns
+     */
     get<TResponse>(path: string, options?: RequestOptions, guard?: Guard<TResponse>): Promise<TResponse> {
         return this.request<TResponse>("GET", path, undefined, options, guard);
     }
 
+    /**
+     * Call HTTP POST request and parse the JSON response
+     * @param path Path relative to the base URL
+     * @param body Request body
+     * @param options Optional request options
+     * @param guard An optional guard function to validate the response shape.
+     * @returns
+     */
     post<TResponse, TBody = unknown>(
         path: string,
         body?: TBody,
@@ -136,6 +151,14 @@ export class HttpClient {
         return this.request<TResponse>("POST", path, body, options, guard);
     }
 
+    /**
+     * Call HTTP PUT request and parse the JSON response
+     * @param path Path relative to the base URL
+     * @param body Request body
+     * @param options Optional request options
+     * @param guard An optional guard function to validate the response shape.
+     * @returns
+     */
     put<TResponse, TBody = unknown>(
         path: string,
         body?: TBody,
@@ -145,6 +168,14 @@ export class HttpClient {
         return this.request<TResponse>("PUT", path, body, options, guard);
     }
 
+    /**
+     * Call HTTP PATCH request and parse the JSON response
+     * @param path Path relative to the base URL
+     * @param body Request body
+     * @param options Optional request options
+     * @param guard An optional guard function to validate the response shape.
+     * @returns
+     */
     patch<TResponse, TBody = unknown>(
         path: string,
         body?: TBody,
@@ -154,6 +185,13 @@ export class HttpClient {
         return this.request<TResponse>("PATCH", path, body, options, guard);
     }
 
+    /**
+     * Call HTTP DELETE request and parse the JSON response
+     * @param path Path relative to the base URL
+     * @param options Optional request options
+     * @param guard An optional guard function to validate the response shape.
+     * @returns
+     */
     delete<TResponse = void>(path: string, options?: RequestOptions, guard?: Guard<TResponse>): Promise<TResponse> {
         return this.request<TResponse>("DELETE", path, undefined, options, guard);
     }

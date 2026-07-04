@@ -1,4 +1,4 @@
-import { AuthStrategy, HeaderValue, HttpClient, HttpResponseError, RequestOptions } from "./http-client";
+import { Auth, HeaderValue, HttpClient, HttpResponseError, RequestOptions } from "./http-client";
 import { Guard, trustShape } from "./language";
 
 export interface JsonRpcError {
@@ -28,7 +28,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export class JsonRpcHttpClient extends HttpClient {
     constructor(
         baseUrl: string,
-        auth?: AuthStrategy,
+        auth?: Auth,
         defaultHeaders: Record<string, HeaderValue> = {},
         private readonly config?: {
             idempotencyPath?: string
