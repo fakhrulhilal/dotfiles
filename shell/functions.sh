@@ -1,3 +1,42 @@
+encode_b64() {
+    printf "%s" "$1" | base64
+}
+
+build_url() {
+    # parameter name, e.g. "kafka"
+    name_uc=$(printf "%s" "$1" | tr '[:lower:]' '[:upper:]')
+
+    # resolve env vars
+    eval scheme="\${${name_uc}_SCHEME:-$1}"
+    eval host="\${${name_uc}_HOST}"
+    eval port="\${${name_uc}_PORT}"
+    eval username="\${${name_uc}_USERNAME}"
+    eval password="\${${name_uc}_PASSWORD}"
+    eval namespace="\${${name_uc}_NAMESPACE}"
+
+    # base64 encode only when present
+    # build auth segment
+    auth=""
+    if [ -n "$username" ] && [ -n "$password" ]; then
+      auth="$(encode_b64 "$username:$password")@"
+    elif [ -n "$username" ]; then
+      auth="$(encode_b64 "$username")@"
+    elif [ -n "$password" ]; then
+      auth="$(encode_b64 ":$password")@"
+    fi
+
+    # build host:port
+    hostport="$host"
+    [ -n "$port" ] && hostport="${host}:${port}"
+
+    # build namespace
+    ns=""
+    [ -n "$namespace" ] && ns="/${namespace}"
+
+    # final URL
+    printf "%s://%s%s%s\n" "$scheme" "$auth" "$hostport" "$ns"
+}
+
 set_export_variable() {
     var_name=$1
     var_value=$2
