@@ -1,5 +1,5 @@
 [tools]
-usage = "3.2.0"
+usage = "latest"
 
 # languages
 rust = "latest"
@@ -59,14 +59,15 @@ fzf = "latest"
 } # regex helper
 "cargo:darya" = { version = "latest", depends = "rust" } # disk usage analysis
 "github:facebook/zstd" = {
+    os = ["macos", "linux"],
     version = "latest",
     asset_pattern = "zstd-{{ version }}.tar.gz",
     bin_path = "zstd-{{ version }}/programs",
     filter_bins = "zstdless,zstdgrep",
     postinstall = '''
         target_dir="$MISE_TOOL_INSTALL_PATH/zstd-$MISE_TOOL_VERSION"
-        make -C "$target_dir"
-        ln -sv "$target_dir/programs/zstd" "$MISE_TOOL_INSTALL_PATH/.mise-bins"
+        make -C "$target_dir" -j$(sysctl -n hw.ncpu || echo 2)
+        mv "$target_dir/programs" "$MISE_TOOL_INSTALL_PATH/bin"
         '''
 }
 
