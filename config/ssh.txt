@@ -13,10 +13,10 @@ Host *
 	# override the key for this host
 #	IdentityFile "~/.ssh/private.key"
 
-Host ssh.dev.azure.com vs-ssh.visualstudio.com
+Host ssh.dev.azure.com *.visualstudio.com
     Hostname ssh.dev.azure.com
     HostkeyAlgorithms +ssh-rsa
     #MACs +hmac-sha2-512,+hmac-sha2-256
-    #KexAlgorithms +diffie-hellman-group-exchange-sha256,+diffie-hellman-group14-sha1,+diffie-hellman-group1-sha1
+    KexAlgorithms +diffie-hellman-group-exchange-sha256
     # Azure DevOps currently only supports RSA algorithm
     IdentityFile "~/.ssh/id_rsa"
