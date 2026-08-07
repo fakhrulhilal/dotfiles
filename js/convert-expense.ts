@@ -18,7 +18,7 @@ const Config = {
 };
 const tracer = trace.getTracer(Config.name, Config.version);
 
-async function importCommandHandler(span: Span, input: string, output: string | undefined, force: boolean) {
+async function importCommandHandler(span: Span, input: string, output: string | undefined, delimiter: string, force: boolean) {
     if (!input || !existsSync(input)) {
         throw new ValidationError(`Input file not found: ${input}`)
     }
@@ -32,7 +32,7 @@ async function importCommandHandler(span: Span, input: string, output: string | 
     const csvContents = Csv.parse(csvText, {
         headers : true,
         trim : true,
-        delimiter : ';',
+        delimiter : delimiter,
         delimitersToGuess : [';', ','],
     });
 
@@ -96,8 +96,9 @@ await new Command()
         .description("Import expense from CSV to Excel using table format")
         .option("-i, --input <file:string>", "Input CSV file.", { required : true })
         .option("-o, --output [file:string]", "Output Excel file.")
+        .option("-d, --delimiter [character]", "Delimiter character.", { default: ',' })
         .option("-f, --force [force:boolean]", "Force replace if any", { default : false })
-        .action(async ({ input, output, force }, ...args) =>
+        .action(async ({ input, output, delimiter, force }, ...args) =>
             traceInvocation(
                 tracer,
                 "CLI import", {
@@ -106,8 +107,7 @@ await new Command()
                         "output.path" : output ?? '<unset>',
                     },
                 },
-                async (span) => await importCommandHandler(span, input, output, force))))
+                async (span) => await importCommandHandler(span, input, output, delimiter, force))))
     .command("help", new HelpCommand().global())
     .command("completions", new CompletionsCommand())
     .parse();
-

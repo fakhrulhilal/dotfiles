@@ -1,4 +1,4 @@
-import { Guard } from "./language";
+import { Guard } from "./language.ts";
 
 /**
  * HTTP auth strategy
@@ -27,13 +27,13 @@ export class BasicAuth implements Auth {
     constructor(private username: string, private password: string) {
     }
 
-    async getAuthHeader(): Promise<string> {
+    getAuthHeader(): Promise<string> {
         const raw = `${this.username}:${this.password}`;
         const encoded =
             typeof btoa === "function"
                 ? btoa(raw)
                 : Buffer.from(raw, "utf-8").toString("base64"); // Node fallback
-        return `Basic ${encoded}`;
+        return Promise.resolve(`Basic ${encoded}`);
     }
 }
 
@@ -281,4 +281,3 @@ export class HttpClient {
         return url.toString();
     }
 }
-
