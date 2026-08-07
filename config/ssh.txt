@@ -1,6 +1,6 @@
 # we can also set default for all hosts here
 # must have file ~/.ssh/private.key.pub
-#IdentityFile "~/.ssh/private.key"
+IdentityFile "~/.ssh/id_ed25519"
 # Load from this file
 # Include /path/to/this/file
 

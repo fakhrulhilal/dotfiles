@@ -1,7 +1,7 @@
 # vim: set filetype=zsh:
 [ -z "$DOT_HOME" ] && export DOT_HOME="$(dirname $(dirname "$(realpath "$0")"))"
 export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.bun/bin:$PATH"
 
 # Added by OrbStack: command-line tools and integration
 # This won't be added again if you remove it.

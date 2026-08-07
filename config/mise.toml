@@ -85,12 +85,15 @@ fnox = {
             fnox completion bash > "$HOME/.local/share/bash-completion/completions/fnox"
         fi
         '''
-}
-age = "latest"
+} # secret manager
+age = "latest" # encryption tool
+"github:maif/yozefu" = "latest" # Kafka client
+redis = "8.6.2"
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
 "cargo:csvlens" = "latest"
+"github:Elpulgo/azdo" = "latest" # Azure DevOps client
 
 [settings]
 experimental = true
