@@ -59,6 +59,51 @@ account for the rest, then we can configure config specific only for that folder
 
 > NOTE: It's good to have global ssh config for Azure DevOps, as it only supports RSA algorithm only at the moment.
 
+## Using global ssh config
+
+This approach is similar to global git config, except, we rely on ssh config rather than git config. The 
+problem with git config, it appends ssh command globally, and doesn't respect more closer config, there is 
+no overriding rule in git config. That's why we use this approach. Taking example of previous scenario, we 
+can use this config
+
+<details>
+    <summary>Sample configurations</summary>
+
+`~/.ssh/config`
+```
+Match host ssh.dev.azure.com exec "pwd | grep -qi '/projects/jobs/'"
+    IdentityFile ~/.ssh/id_office
+    IdentitiesOnly yes
+
+Include "~/Projects/Jobs/ssh.txt"
+```
+
+`~/Projects/Jobs/ssh.txt`
+```
+# Default identity for all
+IdentityFile "~/.ssh/id_ed25519"
+
+Host ssh.dev.azure.com *.visualstudio.com
+    Hostname ssh.dev.azure.com
+    HostkeyAlgorithms +ssh-rsa
+    #MACs +hmac-sha2-512,+hmac-sha2-256
+    KexAlgorithms +diffie-hellman-group-exchange-sha256
+    # Default identity for Azure DevOps for all repositories
+    IdentityFile "~/.ssh/id_rsa"
+    IdentitiesOnly yes
+```
+
+</details>
+
+Technically, ssh will offer all keys in following order:
+- `~/.ssh/id_office`
+- `~/.ssh/id_rsa`
+- `~/.ssh/id_ed25519`
+
+So it depends on our Azure DevOps, which key we're storing in their server. If first key accepted, then it 
+will be used as authentication. This means, first key pair matches win (not the opposite). The same rule 
+applies when configuring ssh. We should include global config as the last over specific rule.
+
 ## Specific config per repository
 
 Suppose a repository connect to different Azure DevOps remote, such as an office is moving to new organization due to 

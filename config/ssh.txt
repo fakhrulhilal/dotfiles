@@ -20,3 +20,4 @@ Host ssh.dev.azure.com *.visualstudio.com
     KexAlgorithms +diffie-hellman-group-exchange-sha256
     # Azure DevOps currently only supports RSA algorithm
     IdentityFile "~/.ssh/id_rsa"
+    IdentitiesOnly yes
