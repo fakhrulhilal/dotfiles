@@ -1,0 +1,7 @@
+<linker>
+    <assembly fullname="Newtonsoft.Json" preserve="all"/>
+    <assembly fullname="Avro" preserve="all"/>
+    <assembly fullname="Confluent.SchemaRegistry.Serdes.Avro" preserve="all"/>
+    <assembly fullname="Confluent.Kafka" preserve="all"/>
+    <assembly fullname="System.CodeDom" preserve="all"/>
+</linker>
