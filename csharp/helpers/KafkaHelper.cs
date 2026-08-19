@@ -1,8 +1,8 @@
 #:include ../models/Url.cs
+#:include ../models/Result.cs
 
 #:package Confluent.Kafka@2.4.0
 #:package Confluent.SchemaRegistry.Serdes.Avro@2.4.0
-#:package PrettyConsole@*
 
 using System.Text.Json;
 using Avro;
@@ -11,12 +11,11 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using Confluent.SchemaRegistry;
 using Confluent.SchemaRegistry.Serdes;
-using PrettyConsole;
 using Dotfiles.Models;
-using CC = System.ConsoleColor;
 
 namespace Dotfiles.Helpers;
 
+using Result = Result<KafkaError>;
 public readonly record struct SchemaInfo(
     int Id,
     RecordSchema Schema,
@@ -26,27 +25,23 @@ public readonly record struct SchemaInfo(
 
 internal static class KafkaHelper
 {
-    public static void ToConsole(this Error error) =>
-        Console.WriteLineInterpolated($"{CC.Red}Error{CC.Default}: {error.Reason}");
+    private static void ToConsole(this Error error) => Console.Error.WriteLine($"ERROR: {error.Reason}");
 
-    public static void ToConsole(this LogMessage logMessage)
-    {
-        switch (logMessage.Level)
-        {
-            case SyslogLevel.Warning:
-                Console.WriteLineInterpolated($"[{CC.Yellow}]<{logMessage.Level:u}>{CC.Default} {logMessage.Message}");
-                break;
-            case SyslogLevel.Error or SyslogLevel.Critical:
-                Console.WriteLineInterpolated($"[{CC.Red}]<{logMessage.Level}>{CC.Default} {logMessage.Message}");
-                break;
-            default:
-                Console.WriteLineInterpolated($"{CC.White}<{logMessage.Level}>{CC.Default} {logMessage.Message}");
-                break;
-        }
-    }
+    private static void ToConsole(this LogMessage log) => Console.WriteLine($"[{log.Level}] {log.Message}");
 
-    public static IProducer<TKey, TMessage>? BuildKafkaProducerClient<TKey, TMessage>(string? url,
-        string fallbackEnvName = "KAFKA_URL")
+    private static void WriteToConsole<TKey, TMessage>(IProducer<TKey, TMessage> _, Error error) => error.ToConsole();
+
+    private static void WriteToConsole<TKey, TMessage>(IProducer<TKey, TMessage> _, LogMessage log) => log.ToConsole();
+
+    private static void WriteToConsole(IAdminClient _, Error error) => error.ToConsole();
+
+    private static void WriteToConsole(IAdminClient _, LogMessage log) => log.ToConsole();
+
+    public static IProducer<TKey, TMessage>? BuildKafkaProducerClient<TKey, TMessage>(
+        string? url,
+        string fallbackEnvName = "KAFKA_URL",
+        Action<IProducer<TKey, TMessage>, Error>? errorHandler = null,
+        Action<IProducer<TKey, TMessage>, LogMessage>? logHandler = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
@@ -56,18 +51,25 @@ internal static class KafkaHelper
             ? parsedUrl.ToProducerConfig()
             : throw new FormatException("Invalid Kafka URL format.");
         return new ProducerBuilder<TKey, TMessage>(config)
-            .SetErrorHandler((_, error) => error.ToConsole())
-            .SetLogHandler((_, log) => log.ToConsole())
+            .SetErrorHandler(errorHandler ?? WriteToConsole)
+            .SetLogHandler(logHandler ?? WriteToConsole)
             .Build();
     }
 
-    public static IProducer<TKey, TMessage>? BuildKafkaProducerClient<TKey, TMessage>(Url url) =>
+    public static IProducer<TKey, TMessage>? BuildKafkaProducerClient<TKey, TMessage>(
+        Url url,
+        Action<IProducer<TKey, TMessage>, Error>? errorHandler = null,
+        Action<IProducer<TKey, TMessage>, LogMessage>? logHandler = null) =>
         new ProducerBuilder<TKey, TMessage>(url.ToProducerConfig())
-            .SetErrorHandler((_, error) => error.ToConsole())
-            .SetLogHandler((_, log) => log.ToConsole())
+            .SetErrorHandler(errorHandler ?? WriteToConsole)
+            .SetLogHandler(logHandler ?? WriteToConsole)
             .Build();
 
-    public static IAdminClient? BuildKafkaAdminClient(string? url, string fallbackEnvName = "KAFKA_URL")
+    public static IAdminClient? BuildKafkaAdminClient(
+        string? url,
+        string fallbackEnvName = "KAFKA_URL",
+        Action<IAdminClient, Error>? errorHandler = null,
+        Action<IAdminClient, LogMessage>? logHandler = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
@@ -77,8 +79,8 @@ internal static class KafkaHelper
             ? parsedUrl.ToAdminConfig()
             : throw new FormatException("Invalid Kafka URL format.");
         return new AdminClientBuilder(config)
-            .SetErrorHandler((_, error) => error.ToConsole())
-            .SetLogHandler((_, log) => log.ToConsole())
+            .SetErrorHandler(errorHandler ?? WriteToConsole)
+            .SetLogHandler(logHandler ?? WriteToConsole)
             .Build();
     }
 
@@ -97,55 +99,48 @@ internal static class KafkaHelper
 
     extension(ISchemaRegistryClient client)
     {
-        public async ValueTask<SchemaInfo?> GetSchema(string topic)
+        public async ValueTask<Result.WithValue<SchemaInfo>> GetSchema(string topic)
         {
             ArgumentException.ThrowIfNullOrEmpty(topic);
 
             var subject = $"{topic}-value";
             var metadata = await client.GetLatestSchemaAsync(subject);
-            if (Avro.Schema.Parse(metadata.SchemaString) is not RecordSchema avroSchema) return null;
+            if (Avro.Schema.Parse(metadata.SchemaString) is not RecordSchema avroSchema) return KafkaError.NotFound;
 
             var serializer = new AvroSerializer<GenericRecord>(client);
             return new SchemaInfo(metadata.Id, avroSchema, serializer, topic);
         }
 
-        public async Task<ErrorCodes> RegisterSchemaAsync(
+        public async Task<Result.WithValue<string>> RegisterSchemaAsync(
             string topicName, string schemaFile, string schemaDir, CancellationToken cancellationToken)
         {
             var subject = $"{topicName}-value";
             var schemaPath = Path.Combine(schemaDir, schemaFile);
-            if (!File.Exists(schemaPath))
-            {
-                Console.WriteLineInterpolated(
-                    $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
-                return ErrorCodes.Failed;
-            }
+            if (!File.Exists(schemaPath)) return KafkaError.NotFound;
 
             try
             {
                 var schemaContent = await File.ReadAllTextAsync(schemaPath, cancellationToken);
                 var schema = new Confluent.SchemaRegistry.Schema(schemaContent, SchemaType.Avro);
                 var schemaId = await client.RegisterSchemaAsync(subject, schema);
-                Console.WriteLineInterpolated(
-                    $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
-                return ErrorCodes.Success;
+                return schemaId.ToString();
             }
             catch (Exception ex)
             {
-                Console.WriteLineInterpolated(
-                    $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}: {CC.Cyan}{ex.Message}{CC.Default}");
-                return ErrorCodes.Failed;
+                return KafkaError.Unknown(ex.Message);
             }
         }
 
-        public async ValueTask<int?> TryPopulateValue(Message<string?, byte[]> message, string topic,
+        public async ValueTask<Result.WithValue<int>> TryPopulateValue(Message<string?, byte[]> message, string topic,
             string jsonPayload)
         {
             ArgumentException.ThrowIfNullOrEmpty(jsonPayload);
             ArgumentException.ThrowIfNullOrEmpty(topic);
             ArgumentNullException.ThrowIfNull(message);
 
-            if (await client.GetSchema(topic) is not { } schemaInfo) return null;
+            var result = await client.GetSchema(topic);
+            if (result is not Result.Success<SchemaInfo> { Value: var schemaInfo })
+                return result.Error;
 
             var record = JsonToGenericRecord(jsonPayload, schemaInfo.Schema);
             var serializedPayload = await schemaInfo.Serializer.SerializeAsync(record,
@@ -157,7 +152,7 @@ internal static class KafkaHelper
 
     extension(IAdminClient client)
     {
-        public async Task<ErrorCodes> RegisterTopicAsync(string topicName, int partitions, short replication)
+        public async Task<Result> RegisterTopicAsync(string topicName, int partitions, short replication)
         {
             try
             {
@@ -168,19 +163,15 @@ internal static class KafkaHelper
                     ReplicationFactor = replication
                 };
                 await client.CreateTopicsAsync([topicSpec]);
-                Console.WriteLineInterpolated(
-                    $"    {CC.Green}✓{CC.Default} Topic created (partitions: {partitions}, replication: {replication})");
-                return ErrorCodes.Success;
+                return Result.Ok();
             }
             catch (Exception ex) when (ex.Message.Contains("already exists"))
             {
-                Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
-                return ErrorCodes.Skipped;
+                return KafkaError.AlreadyExists;
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                Console.WriteLineInterpolated($"    {CC.Red}✗{CC.Default} Failed to create topic: {ex.Message}");
-                return ErrorCodes.Failed;
+                return KafkaError.Unknown(exc.Message);
             }
         }
     }
@@ -301,10 +292,91 @@ internal static class KafkaHelper
             if (url.Extras.TryGetValue("ack", out var ackValue) &&
                 Enum.TryParse<Acks>(ackValue, true, out var acks))
                 config.Acks = acks;
+            config.Set("socket.connection.setup.timeout.ms", "");
             return config;
         }
 
-        public AdminClientConfig ToAdminConfig() => url.ToConfig<AdminClientConfig>();
+        public AdminClientConfig ToAdminConfig()
+        {
+            var result = url.ToConfig<AdminClientConfig>();
+            string[] validConfigs =
+            [
+                "client.id",
+                "message.max.bytes",
+                "message.copy.max.bytes",
+                "receive.message.max.bytes",
+                "max.in.flight",
+                "topic.metadata.refresh.interval.ms",
+                "metadata.max.age.ms",
+                "topic.metadata.refresh.fast.interval.ms",
+                "topic.metadata.refresh.sparse",
+                "topic.metadata.propagation.max.ms",
+                "topic.blacklist",
+                "debug",
+                "socket.timeout.ms",
+                "socket.send.buffer.bytes",
+                "socket.receive.buffer.bytes",
+                "socket.keepalive.enable",
+                "socket.nagle.disable",
+                "socket.max.fails",
+                "broker.address.ttl",
+                "socket.connection.setup.timeout.ms",
+                "connections.max.idle.ms",
+                "reconnect.backoff.ms",
+                "reconnect.backoff.max.ms",
+                "statistics.interval.ms",
+                "log.queue",
+                "log.thread.name",
+                "enable.random.seed",
+                "log.connection.close",
+                "internal.termination.signal",
+                "api.version.request",
+                "api.version.request.timeout.ms",
+                "api.version.fallback.ms",
+                "broker.version.fallback",
+                "allow.auto.create.topics",
+                "ssl.cipher.suites",
+                "ssl.curves.list",
+                "ssl.sigalgs.list",
+                "ssl.key.location",
+                "ssl.key.password",
+                "ssl.key.pem",
+                "ssl.certificate.location",
+                "ssl.certificate.pem",
+                "ssl.ca.location",
+                "ssl.ca.pem",
+                "ssl.ca.certificate.stores",
+                "ssl.crl.location",
+                "ssl.keystore.location",
+                "ssl.keystore.password",
+                "ssl.providers",
+                "ssl.engine.location",
+                "ssl.engine.id",
+                "enable.ssl.certificate.verification",
+                "ssl.endpoint.identification.algorithm",
+                "sasl.kerberos.service.name",
+                "sasl.kerberos.principal",
+                "sasl.kerberos.kinit.cmd",
+                "sasl.kerberos.keytab",
+                "sasl.kerberos.min.time.before.relogin",
+                "sasl.oauthbearer.config",
+                "enable.sasl.oauthbearer.unsecure.jwt",
+                "sasl.oauthbearer.method",
+                "sasl.oauthbearer.client.id",
+                "sasl.oauthbearer.client.secret",
+                "sasl.oauthbearer.scope",
+                "sasl.oauthbearer.extensions",
+                "sasl.oauthbearer.token.endpoint.url",
+                "plugin.library.paths",
+                "client.rack",
+                "client.dns.lookup"
+            ];
+            var compareMode = StringComparer.OrdinalIgnoreCase;
+            foreach (var pair in url.Extras.Where(pair => validConfigs.Contains(pair.Key, compareMode)))
+                result.Set(pair.Key, pair.Value);
+
+            return result;
+        }
 
         public ProducerConfig ToProducerConfig()
         {
@@ -330,4 +402,20 @@ internal static class KafkaHelper
             return config;
         }
     }
+}
+
+public enum Codes
+{
+    None = 0,
+    AlreadyExists,
+    Invalid,
+    NotFound,
+    Unknown
+}
+
+public sealed record KafkaError(Codes Code, string? Message = null)
+{
+    public static KafkaError NotFound => new(Codes.NotFound);
+    public static KafkaError AlreadyExists => new(Codes.AlreadyExists);
+    public static KafkaError Unknown(string message) => new(Codes.Unknown, message);
 }

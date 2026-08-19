@@ -8,16 +8,20 @@
 #:include ./helpers/KafkaHelper.cs
 
 #:package ConsoleAppFramework@*
-#:package Spectre.Console@*
+#:package PrettyConsole@*
+#:package Spectre.Console@0.57
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Confluent.Kafka;
 using ConsoleAppFramework;
+using Dotfiles.Helpers;
 using PrettyConsole;
 using Spectre.Console;
 using static Dotfiles.Helpers.KafkaHelper;
+using static Helper;
 using CC = System.ConsoleColor;
+using Result = Dotfiles.Models.Result<Dotfiles.Helpers.KafkaError>;
 
 ConsoleApp.Create().Run(args);
 return 0;
@@ -30,13 +34,13 @@ sealed class Commands
     /// </summary>
     /// <param name="kafkaUrl">Kafka connection URL. Default: from environment variable KAFKA_URL</param>
     /// <param name="registryUrl">
-    /// Schema Registry URL, required when message or message path is specified. Default: from environment variable SCHEMA_REGISTRY_URL.
+    /// Schema Registry URL, required when a message or message path is specified. Default: from environment variable SCHEMA_REGISTRY_URL.
     /// </param>
     /// <param name="topic">-t, Kafka topic to produce</param>
     /// <param name="message">-m, Message payload</param>
     /// <param name="messagePath">-p, Path to a file containing the message payload</param>
     /// <param name="key">-k, Message key</param>
-    /// <param name="header">Message headers in 'Key:Value' format (can be specified multiple times). It also accepts special values like $uuid and $guid in Value (which basically the same thing).</param>
+    /// <param name="header">Message headers in 'Key:Value' format (can be specified multiple times). It also accepts special values like $uuid and $guid in Value (which are basically the same thing).</param>
     [Command("produce|p")]
     public async Task<int> ProductAsync(
         string topic,
@@ -46,7 +50,8 @@ sealed class Commands
         [HideDefaultValue] string? key = null, params string[] header)
     {
         using var producer =
-            BuildKafkaProducerClient<string?, byte[]>(kafkaUrl) ??
+            BuildKafkaProducerClient<string?, byte[]>(kafkaUrl,
+                logHandler: Silence, errorHandler: WriteToConsole) ??
             throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
         var kafkaMessage = new Message<string?, byte[]> { Key = key, Value = null! };
         Console.WriteLine("📩 Producing message to Kafka");
@@ -63,15 +68,15 @@ sealed class Commands
                 _ when !string.IsNullOrEmpty(message) => message,
                 _ => throw new InvalidOperationException("Message payload is not specified.")
             };
-            var schema = await schemaRegistryClient.TryPopulateValue(kafkaMessage, topic, payload);
-            if (schema is null)
+            if (await schemaRegistryClient.TryPopulateValue(kafkaMessage, topic, payload)
+                is not Result.Success<int> { Value: var schemaId })
             {
                 Console.WriteLineInterpolated(
                     $" {CC.Red}❌ Error{CC.Default}: Could not find valid schema for topic '{topic}'");
                 return 1;
             }
 
-            Console.WriteLineInterpolated($"   Using schema ID: {CC.Cyan}{schema.Value}{CC.Default}");
+            Console.WriteLineInterpolated($"   Using schema ID: {CC.Cyan}{schemaId}{CC.Default}");
         }
 
         var result = await producer.ProduceAsync(topic, kafkaMessage);
@@ -82,18 +87,18 @@ sealed class Commands
     }
 
     /// <summary>
-    /// Produce batch messages to a Kafka topic from given file with specified format
+    /// Produce batch messages to a Kafka topic from a given file with a specified format
     /// </summary>
     /// <param name="kafkaUrl">Kafka connection URL. Default: from environment variable KAFKA_URL</param>
     /// <param name="registryUrl">
-    /// Schema Registry URL, required when message or message path is specified. Default: from environment variable SCHEMA_REGISTRY_URL.
+    /// Schema Registry URL, required when a message or message path is specified. Default: from environment variable SCHEMA_REGISTRY_URL.
     /// </param>
     /// <param name="topic">-t, Kafka topic to produce</param>
     /// <param name="messagePath">-p, Path to a file containing the message payload</param>
-    /// <param name="messageFormat">-f, Read from file per line, and use this format to produce batch message. Replace file content with #DATA#</param>
+    /// <param name="messageFormat">-f, Read from a file per line, and use this format to produce a batch message. Replace file content with #DATA#</param>
     /// <param name="batchSize">-b, Batch size of messages to produce in a single batch</param>
     /// <param name="keyFormat">-k, Message key</param>
-    /// <param name="header">Message headers in 'Key:Value' format (can be specified multiple times). It also accepts special values like $uuid and $guid in Value (which basically the same thing).</param>
+    /// <param name="header">Message headers in 'Key:Value' format (can be specified multiple times). It also accepts special values like $uuid and $guid in Value (which are basically the same thing).</param>
     [Command("batch-produce|b")]
     public async Task<int> BatchProductAsync(
         string topic, string messagePath, string messageFormat,
@@ -109,13 +114,30 @@ sealed class Commands
         }
 
         using var producer =
-            BuildKafkaProducerClient<string?, byte[]>(kafkaUrl) ??
+            BuildKafkaProducerClient<string?, byte[]>(kafkaUrl,
+                logHandler: Silence, errorHandler: Silence) ??
             throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
         using var schemaRegistryClient =
             BuildSchemaRegistryClient(registryUrl) ??
             throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
-        var schema = await schemaRegistryClient.GetSchema(topic)
-                     ?? throw new InvalidOperationException($"Could not find valid schema for topic '{topic}'");
+        var schemaResult = await schemaRegistryClient.GetSchema(topic);
+        if (schemaResult is not Result.Success<SchemaInfo> { Value: var schema })
+        {
+            switch (schemaResult.Error)
+            {
+                case { Code: Codes.NotFound }:
+                    Console.WriteLineInterpolated(
+                        $"{CC.Red}❌ Error{CC.Default}: Could not find valid schema for topic: '{topic}'");
+                    break;
+                case { Code: Codes.Unknown, Message: var errorDetail } when !string.IsNullOrEmpty(errorDetail):
+                    Console.WriteLineInterpolated(
+                        $"{CC.Red}❌ Error{CC.Default}: Unknown error during getting schema for topic: '{topic}': {CC.Red}{errorDetail}{CC.Default}");
+                    break;
+            }
+
+            return 1;
+        }
+
         Console.WriteLine();
         var serializationContext = new SerializationContext(MessageComponentType.Value, topic);
         var table = new Table().Border(TableBorder.Simple).Expand();
@@ -178,7 +200,7 @@ sealed class Commands
     /// </summary>
     /// <param name="kafkaUrl">Kafka connection URL. Default: from environment variable KAFKA_URL</param>
     /// <param name="registryUrl">Schema Registry URL. Default: from environment variable SCHEMA_REGISTRY_URL</param>
-    /// <param name="configPath">-c, Path to Kafka topics configuration file. Default: from environment variable KAFKA_TOPIC_FILE.</param>
+    /// <param name="configPath">-c, Path to a Kafka topics configuration file. Default: from environment variable KAFKA_TOPIC_FILE.</param>
     /// <param name="schemaDir">-d, Directory containing schema files. Default: from environment variable KAFKA_SCHEMA_FOLDER.</param>
     /// <param name="partition">-p, Default number of partitions per topic when not specified in config</param>
     /// <param name="replication">-r, Default replication factor when not specified in config</param>
@@ -221,36 +243,55 @@ sealed class Commands
         var registeredSchemaCount = 0;
         var failedRegisterSchemas = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         using var adminClient =
-            BuildKafkaAdminClient(kafkaUrl)
+            BuildKafkaAdminClient(kafkaUrl, logHandler: Silence, errorHandler: Silence)
             ?? throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
         using var schemaRegistryClient =
             BuildSchemaRegistryClient(registryUrl) ??
             throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
         foreach (var spec in topicSpecifications)
         {
+            if (cancellationToken.IsCancellationRequested) return 1;
+
+            var totalPartition = spec.Partition ?? partition;
+            var totalReplication = spec.Replication ?? replication;
             Console.WriteLineInterpolated(
                 $"{CC.White}㉿{CC.Default} Found topic config: {CC.Cyan}{spec.Topic}{CC.Default} with schema {CC.Cyan}{spec.ValueSchema}{CC.Default}");
-            switch (await adminClient.RegisterTopicAsync(spec.Topic, spec.Partition ?? partition,
-                        spec.Replication ?? replication))
+            switch (await adminClient.RegisterTopicAsync(spec.Topic, totalPartition, totalReplication))
             {
-                case ErrorCodes.Success:
+                case { Successful: true }:
                     createdTopicCount++;
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Green}✓{CC.Default} Topic created (partitions: {totalPartition}, replication: {totalReplication})");
                     break;
-                case ErrorCodes.Skipped:
+                case { Successful: false, Error.Code: Codes.AlreadyExists }:
+                    Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
                     skippedTopics.Add(spec.Topic);
                     break;
-                case ErrorCodes.Failed:
+                case { Successful: false, Error.Code: Codes.Unknown, Error.Message: var errorDetail }
+                    when !string.IsNullOrEmpty(errorDetail):
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Red}✗{CC.Default} Failed to create topic: {spec.Topic}, {CC.Red}{errorDetail}{CC.Default}");
                     failedTopics.Add(spec.Topic);
                     continue;
             }
 
+            var subject = $"{spec.Topic}-value";
             switch (await schemaRegistryClient.RegisterSchemaAsync(spec.Topic, spec.ValueSchema, schemaDir!,
                         cancellationToken))
             {
-                case ErrorCodes.Success:
+                case Result.Success<string> { Value: var schemaId }:
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     registeredSchemaCount++;
                     break;
-                case ErrorCodes.Failed:
+                case { Successful: false, Error.Code: Codes.NotFound }:
+                    var schemaPath = Path.Combine(schemaDir!, spec.ValueSchema);
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
+                    break;
+                case { Successful: false }:
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}");
                     failedRegisterSchemas.Add(spec.Topic);
                     break;
             }
@@ -275,10 +316,12 @@ sealed class Commands
 
         string? Validate()
         {
-            if (!File.Exists(configPath ?? Environment.GetEnvironmentVariable("KAFKA_TOPIC_FILE")))
-                return $"Config file not found: {configPath}";
-            if (!Directory.Exists(schemaDir ?? Environment.GetEnvironmentVariable("KAFKA_SCHEMA_FOLDER")))
-                return $"Schema directory not found: {schemaDir}";
+            configPath ??= Environment.GetEnvironmentVariable("KAFKA_TOPIC_FILE");
+            if (!File.Exists(configPath)) return $"Config file not found: {configPath}";
+
+            schemaDir ??= Environment.GetEnvironmentVariable("KAFKA_SCHEMA_FOLDER");
+            if (!Directory.Exists(schemaDir)) return $"Schema directory not found: {schemaDir}";
+
             return null;
         }
     }
@@ -294,11 +337,26 @@ sealed record SchemaConfig(
 [JsonSourceGenerationOptions(WriteIndented = false, PropertyNamingPolicy = JsonKnownNamingPolicy.KebabCaseLower)]
 partial class JsonOpt : JsonSerializerContext;
 
-enum ErrorCodes
-{
-    Success,
-    Skipped,
-    Failed
-}
-
 internal readonly record struct ProduceResult(string Payload, int Partition, long Offset);
+
+file static class Helper
+{
+    public static void Silence(IProducer<string?, byte[]> _, LogMessage log)
+    {
+    }
+
+    public static void WriteToConsole(IProducer<string?, byte[]> _, Error error) =>
+        Console.WriteLineInterpolated($"{CC.Red}Error{CC.Default}: {error.Reason}");
+
+    public static void Silence(IProducer<string?, byte[]> _, Error error)
+    {
+    }
+
+    public static void Silence(IAdminClient _, LogMessage log)
+    {
+    }
+
+    public static void Silence(IAdminClient _, Error error)
+    {
+    }
+}
