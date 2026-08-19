@@ -1,8 +1,17 @@
 .wakatime-project
 .DS_Store
+
+# AI
+.agents
+
+# Local configuration
 .env
 .env.*
 .devcontainer
 **/*.local.toml
 
+# IDE/editor
 .idea/
+
+# Build output
+**/artifacts
