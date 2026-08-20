@@ -37,6 +37,8 @@ My personal shell experience
     11. csvlens, CSV viewer
     12. lazygit, git TUI
     13. Azure CLI
+    14. jless, another JSON viewer with tree visualization
+    15. DuckDB, DB client across many source
 11. [Mac apps](mac_app.txt) (skip by exporting `SKIP_INSTALL_MAC_APPS` variable):
     1. REST toolkit: Bruno, Postman
     2. Ghostty for terminal

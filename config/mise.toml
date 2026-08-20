@@ -39,6 +39,7 @@ powershell = "latest"
 lsd = "latest" # ls alternative
 ripgrep = "latest" # grep alternative
 yq = "latest" # jq with yaml support
+jless = "latest" # another JSON viewer with nested tree
 "cargo:bat" = { version = "latest", depends = "rust" } # cat alternative
 "cargo:git-delta" = { version = "latest", depends = "rust" } # diff viewer
 fd = "latest" # find alternative
@@ -89,6 +90,7 @@ fnox = {
 age = "latest" # encryption tool
 "github:maif/yozefu" = "latest" # Kafka client
 redis = "8.6.2"
+"github:duckdb/duckdb" = "latest"
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
