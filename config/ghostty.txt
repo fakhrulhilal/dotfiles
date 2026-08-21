@@ -1,3 +1,4 @@
 background = black
 font-family = "CaskaydiaCove NFM Regular"
 font-feature = "liga cast dlig"
+shell-integration-features = true
