@@ -77,6 +77,7 @@ internal sealed class Commands {
             .AddColumn("Time", x => x.LeftAligned().Width(50))
             .AddColumn("Status", x => x.LeftAligned().Width(30));
         day ??= DateOnly.FromDateTime(now);
+        var totalDuration = Duration.Empty;
         await AnsiConsole.Live(table).StartAsync(async ctx => {
             var projects = infoSuccess.Value.ToFrozenDictionary(x => x.Name, x => x, CompareMode);
             var parallelOptions = new ParallelOptions {
@@ -111,9 +112,13 @@ internal sealed class Commands {
                 var status = "❌";
                 var addResult = await client.AddTimeEntry(addEntryDto);
                 if (addResult is not null && !string.IsNullOrEmpty(addResult.Id)) {
-                    status = Duration.TryParse(addResult.TimeInterval?.Duration, out var duration)
-                        ? $"{duration.Display} ✅"
-                        : "✅";
+                    if (Duration.TryParse(addResult.TimeInterval?.Duration, out var duration)) {
+                        totalDuration += duration;
+                        status = $"{duration.Display} ✅";
+                    }
+                    else {
+                        status = "✅";
+                    }
                 }
 
                 await AddAndRefresh(entry.Project, entry.Task, entry.Description, time, status);
@@ -129,6 +134,8 @@ internal sealed class Commands {
                 await UiDelay();
             }
         });
+
+        AnsiConsole.MarkupLine($"Total logged: [green]{totalDuration.Display}[/]");
         return 0;
 
         Result<ValidationCodes>.WithValue<AddTimeEntry[]> ValidateAndGetEntries() {
@@ -143,15 +150,15 @@ internal sealed class Commands {
             apiUrl ??= Environment.GetEnvironmentVariable("CLOCKIFY_API_URL");
             if (string.IsNullOrEmpty(apiUrl)) return ValidationCodes.ApiUrlUnset;
 
-            using var file = File.OpenRead(path);
             try {
+                using var file = File.OpenRead(path);
                 return JsonSerializer.Deserialize(file, JsonOpt.Default.AddTimeEntryArray) is { Length: > 0 } parsed
                     ? parsed
                     : ValidationCodes.BlankEntry;
             }
-            catch (JsonException) {
-                return ValidationCodes.InvalidJsonFile;
-            }
+            catch (PathTooLongException) { return ValidationCodes.FileTooDeep; }
+            catch (UnauthorizedAccessException) { return ValidationCodes.FileNotFound; }
+            catch (JsonException) { return ValidationCodes.InvalidJsonFile; }
         }
 
         async Task<Result<GetInfoCodes>.WithValue<GetProjectResponse[]>> GetInformation(StatusContext ctx) {
@@ -276,6 +283,9 @@ enum ValidationCodes {
 
     [Description("File is not found or not readable")]
     FileNotFound,
+
+    [Description("File is located in very deep nested folder")]
+    FileTooDeep,
 
     [Description("JSON file might contain invalid format")]
     InvalidJsonFile,
