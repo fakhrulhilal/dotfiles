@@ -1,0 +1,75 @@
+# .editorconfig
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+max_line_length = 120
+indent_style = space
+indent_size = 4
+tab_width = 4
+insert_final_newline = false
+
+[*.sql]
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[.editorconfig]
+ij_editorconfig_align_group_field_declarations = false
+ij_editorconfig_space_after_colon = false
+ij_editorconfig_space_after_comma = true
+ij_editorconfig_space_before_colon = false
+ij_editorconfig_space_before_comma = false
+ij_editorconfig_spaces_around_assignment_operators = true
+
+[*.{bash,sh,zsh}]
+indent_size = 2
+tab_width = 2
+shell_binary_ops_start_line = false
+shell_keep_column_alignment_padding = false
+shell_minify_program = false
+shell_redirect_followed_by_space = false
+shell_switch_cases_indented = false
+shell_use_unix_line_separator = true
+
+[*.{markdown,md}]
+markdown_force_one_space_after_blockquote_symbol = true
+markdown_force_one_space_after_header_symbol = true
+markdown_force_one_space_after_list_bullet = true
+markdown_force_one_space_between_words = true
+markdown_format_tables = true
+markdown_insert_quote_arrows_on_wrap = true
+markdown_keep_indents_on_empty_lines = false
+markdown_keep_line_breaks_inside_text_blocks = true
+markdown_max_lines_around_block_elements = 1
+markdown_max_lines_around_header = 1
+markdown_max_lines_between_paragraphs = 1
+markdown_min_lines_around_block_elements = 1
+markdown_min_lines_around_header = 1
+markdown_min_lines_between_paragraphs = 1
+markdown_wrap_text_if_long = true
+markdown_wrap_text_inside_blockquotes = true
+
+[{*.toml,Cargo.lock,Cargo.toml.orig,Gopkg.lock,Pipfile,pdm.lock,poetry.lock,uv.lock}]
+toml_keep_indents_on_empty_lines = false
+
+[*.{xml,html,json,yml,yaml}]
+indent_size = 2
+tab_width = 2
+indent_style = space
+space_inside_empty_tag = true
+
+[{*.yaml,*.yml}]
+yaml_align_values_properties = do_not_align
+yaml_autoinsert_sequence_marker = true
+yaml_block_mapping_on_new_line = false
+yaml_indent_sequence_value = true
+yaml_keep_indents_on_empty_lines = false
+yaml_keep_line_breaks = true
+yaml_line_comment_add_space = false
+yaml_line_comment_add_space_on_reformat = false
+yaml_line_comment_at_first_column = true
+yaml_sequence_on_new_line = false
+yaml_space_before_colon = false
+yaml_spaces_within_braces = true
+yaml_spaces_within_brackets = true

@@ -1,13 +1,9 @@
 namespace Dotfiles.Models;
 
-public class PagedQuery
-{
-    public PagedQuery()
-    {
-    }
+public class PagedQuery {
+    public PagedQuery() { }
 
-    public PagedQuery(int pageNumber, int pageSize)
-    {
+    public PagedQuery(int pageNumber, int pageSize) {
         PageNumber = pageNumber;
         PageSize = pageSize;
     }

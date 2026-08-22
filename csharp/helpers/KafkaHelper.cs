@@ -16,6 +16,7 @@ using Dotfiles.Models;
 namespace Dotfiles.Helpers;
 
 using Result = Result<KafkaError>;
+
 public readonly record struct SchemaInfo(
     int Id,
     RecordSchema Schema,
@@ -23,8 +24,7 @@ public readonly record struct SchemaInfo(
     string Topic
 );
 
-internal static class KafkaHelper
-{
+internal static class KafkaHelper {
     private static void ToConsole(this Error error) => Console.Error.WriteLine($"ERROR: {error.Reason}");
 
     private static void ToConsole(this LogMessage log) => Console.WriteLine($"[{log.Level}] {log.Message}");
@@ -41,8 +41,7 @@ internal static class KafkaHelper
         string? url,
         string fallbackEnvName = "KAFKA_URL",
         Action<IProducer<TKey, TMessage>, Error>? errorHandler = null,
-        Action<IProducer<TKey, TMessage>, LogMessage>? logHandler = null)
-    {
+        Action<IProducer<TKey, TMessage>, LogMessage>? logHandler = null) {
         if (string.IsNullOrWhiteSpace(url))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(url)) return null;
@@ -69,8 +68,7 @@ internal static class KafkaHelper
         string? url,
         string fallbackEnvName = "KAFKA_URL",
         Action<IAdminClient, Error>? errorHandler = null,
-        Action<IAdminClient, LogMessage>? logHandler = null)
-    {
+        Action<IAdminClient, LogMessage>? logHandler = null) {
         if (string.IsNullOrWhiteSpace(url))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(url)) return null;
@@ -85,8 +83,7 @@ internal static class KafkaHelper
     }
 
     public static ISchemaRegistryClient? BuildSchemaRegistryClient(string? url,
-        string fallbackEnvName = "SCHEMA_REGISTRY_URL")
-    {
+        string fallbackEnvName = "SCHEMA_REGISTRY_URL") {
         if (string.IsNullOrWhiteSpace(url))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(url)) return null;
@@ -97,10 +94,8 @@ internal static class KafkaHelper
         return new CachedSchemaRegistryClient(config);
     }
 
-    extension(ISchemaRegistryClient client)
-    {
-        public async ValueTask<Result.WithValue<SchemaInfo>> GetSchema(string topic)
-        {
+    extension(ISchemaRegistryClient client) {
+        public async ValueTask<Result.WithValue<SchemaInfo>> GetSchema(string topic) {
             ArgumentException.ThrowIfNullOrEmpty(topic);
 
             var subject = $"{topic}-value";
@@ -112,28 +107,24 @@ internal static class KafkaHelper
         }
 
         public async Task<Result.WithValue<string>> RegisterSchemaAsync(
-            string topicName, string schemaFile, string schemaDir, CancellationToken cancellationToken)
-        {
+            string topicName, string schemaFile, string schemaDir, CancellationToken cancellationToken) {
             var subject = $"{topicName}-value";
             var schemaPath = Path.Combine(schemaDir, schemaFile);
             if (!File.Exists(schemaPath)) return KafkaError.NotFound;
 
-            try
-            {
+            try {
                 var schemaContent = await File.ReadAllTextAsync(schemaPath, cancellationToken);
                 var schema = new Confluent.SchemaRegistry.Schema(schemaContent, SchemaType.Avro);
                 var schemaId = await client.RegisterSchemaAsync(subject, schema);
                 return schemaId.ToString();
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 return KafkaError.Unknown(ex.Message);
             }
         }
 
         public async ValueTask<Result.WithValue<int>> TryPopulateValue(Message<string?, byte[]> message, string topic,
-            string jsonPayload)
-        {
+            string jsonPayload) {
             ArgumentException.ThrowIfNullOrEmpty(jsonPayload);
             ArgumentException.ThrowIfNullOrEmpty(topic);
             ArgumentNullException.ThrowIfNull(message);
@@ -150,47 +141,35 @@ internal static class KafkaHelper
         }
     }
 
-    extension(IAdminClient client)
-    {
-        public async Task<Result> RegisterTopicAsync(string topicName, int partitions, short replication)
-        {
-            try
-            {
-                var topicSpec = new TopicSpecification
-                {
-                    Name = topicName,
-                    NumPartitions = partitions,
-                    ReplicationFactor = replication
+    extension(IAdminClient client) {
+        public async Task<Result> RegisterTopicAsync(string topicName, int partitions, short replication) {
+            try {
+                var topicSpec = new TopicSpecification {
+                    Name = topicName, NumPartitions = partitions, ReplicationFactor = replication
                 };
                 await client.CreateTopicsAsync([topicSpec]);
                 return Result.Ok();
             }
-            catch (Exception ex) when (ex.Message.Contains("already exists"))
-            {
+            catch (Exception ex) when (ex.Message.Contains("already exists")) {
                 return KafkaError.AlreadyExists;
             }
-            catch (Exception exc)
-            {
+            catch (Exception exc) {
                 return KafkaError.Unknown(exc.Message);
             }
         }
     }
 
-    extension(Message<string?, byte[]> message)
-    {
-        public void PopulateHeaders(string[] headers, char separator = ':')
-        {
+    extension(Message<string?, byte[]> message) {
+        public void PopulateHeaders(string[] headers, char separator = ':') {
             if (headers is not { Length: > 0 }) return;
 
             message.Headers ??= [];
-            foreach (var header in headers)
-            {
+            foreach (var header in headers) {
                 var separatorIndex = header.IndexOf(separator);
                 if (separatorIndex <= 0 || separatorIndex >= header.Length - 1) continue;
 
                 var key = header[..separatorIndex];
-                var value = header[(separatorIndex + 1)..].Trim() switch
-                {
+                var value = header[(separatorIndex + 1)..].Trim() switch {
                     "$uuid" or "$guid" => Guid.CreateVersion7().ToString(),
                     var val => val
                 };
@@ -199,8 +178,7 @@ internal static class KafkaHelper
         }
 
         public async Task TryPopulateValue(SchemaInfo schemaInfo, string jsonPayload,
-            SerializationContext? context = null)
-        {
+            SerializationContext? context = null) {
             ArgumentException.ThrowIfNullOrEmpty(jsonPayload);
 
             var record = JsonToGenericRecord(jsonPayload, schemaInfo.Schema);
@@ -209,15 +187,12 @@ internal static class KafkaHelper
             message.Value = serializedPayload;
         }
 
-        private static GenericRecord JsonToGenericRecord(string json, RecordSchema schema)
-        {
+        private static GenericRecord JsonToGenericRecord(string json, RecordSchema schema) {
             var record = new GenericRecord(schema);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            foreach (var field in schema.Fields)
-            {
-                if (root.TryGetProperty(field.Name, out var value))
-                {
+            foreach (var field in schema.Fields) {
+                if (root.TryGetProperty(field.Name, out var value)) {
                     var avroValue = ConvertJsonValue(value, field.Schema);
                     record.Add(field.Name, avroValue);
                 }
@@ -226,11 +201,9 @@ internal static class KafkaHelper
             return record;
         }
 
-        private static object? ConvertJsonValue(JsonElement token, Avro.Schema schema)
-        {
+        private static object? ConvertJsonValue(JsonElement token, Avro.Schema schema) {
             // Handle union types (e.g., ["null", "string"])
-            if (schema is UnionSchema unionSchema)
-            {
+            if (schema is UnionSchema unionSchema) {
                 if (token.ValueKind == JsonValueKind.Null ||
                     unionSchema.Schemas.FirstOrDefault(x => x.Tag != Avro.Schema.Type.Null) is not { } nonNullSchema)
                     return null;
@@ -238,8 +211,7 @@ internal static class KafkaHelper
                 schema = nonNullSchema;
             }
 
-            return schema.Tag switch
-            {
+            return schema.Tag switch {
                 Avro.Schema.Type.String => token.ToString(),
                 Avro.Schema.Type.Int => token.GetInt32(),
                 Avro.Schema.Type.Long => token.GetInt64(),
@@ -254,34 +226,28 @@ internal static class KafkaHelper
         }
     }
 
-    extension(Url url)
-    {
-        private TConfig ToConfig<TConfig>() where TConfig : ClientConfig, new()
-        {
+    extension(Url url) {
+        private TConfig ToConfig<TConfig>() where TConfig : ClientConfig, new() {
             var config = new TConfig { Acks = Acks.All };
             if (!string.IsNullOrEmpty(url.Host))
                 config.BootstrapServers = $"{url.Host}:{url.Port ?? 9092}";
             var useCredential = !string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password);
-            config.SecurityProtocol = (url.Secure, useCredential) switch
-            {
+            config.SecurityProtocol = (url.Secure, useCredential) switch {
                 (true, true) => SecurityProtocol.SaslSsl,
                 (true, false) => SecurityProtocol.Ssl,
                 (false, true) => SecurityProtocol.SaslPlaintext,
                 _ => SecurityProtocol.Plaintext
             };
-            if (useCredential)
-            {
+            if (useCredential) {
                 config.SaslMechanism = SaslMechanism.Plain;
                 config.SaslUsername = url.Username;
                 config.SaslPassword = url.Password;
             }
 
-            if (url.Secure)
-            {
+            if (url.Secure) {
                 if (url.Extras.TryGetValue("ca.path", out var caPath) && !string.IsNullOrEmpty(caPath))
                     config.SslCaLocation = caPath;
-                if (url.Extras.TryGetValue("trustServerCertificate", out var trustValue))
-                {
+                if (url.Extras.TryGetValue("trustServerCertificate", out var trustValue)) {
                     var alwaysTrust = (bool.TryParse(trustValue, out var boolValue) && boolValue)
                                       || (int.TryParse(trustValue, out var intValue) && intValue != 0);
                     if (alwaysTrust)
@@ -296,11 +262,9 @@ internal static class KafkaHelper
             return config;
         }
 
-        public AdminClientConfig ToAdminConfig()
-        {
+        public AdminClientConfig ToAdminConfig() {
             var result = url.ToConfig<AdminClientConfig>();
-            string[] validConfigs =
-            [
+            string[] validConfigs = [
                 "client.id",
                 "message.max.bytes",
                 "message.copy.max.bytes",
@@ -378,8 +342,7 @@ internal static class KafkaHelper
             return result;
         }
 
-        public ProducerConfig ToProducerConfig()
-        {
+        public ProducerConfig ToProducerConfig() {
             var config = url.ToConfig<ProducerConfig>();
             config.MessageTimeoutMs = url.Extras.TryGetValue("message.timeout.ms", out var timeoutValue) &&
                                       int.TryParse(timeoutValue, out var timeoutMs)
@@ -388,13 +351,11 @@ internal static class KafkaHelper
             return config;
         }
 
-        public SchemaRegistryConfig ToSchemaRegistryConfig()
-        {
+        public SchemaRegistryConfig ToSchemaRegistryConfig() {
             var config = new SchemaRegistryConfig();
             if (!string.IsNullOrEmpty(url.Host))
                 config.Url = $"{(url.Secure ? "https" : "http")}://{url.Host}:{url.Port ?? (url.Secure ? 443 : 80)}";
-            if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password))
-            {
+            if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password)) {
                 config.BasicAuthUserInfo = $"{url.Username}:{url.Password}";
                 config.BasicAuthCredentialsSource = AuthCredentialsSource.UserInfo;
             }
@@ -404,8 +365,7 @@ internal static class KafkaHelper
     }
 }
 
-public enum Codes
-{
+public enum Codes {
     None = 0,
     AlreadyExists,
     Invalid,
@@ -413,8 +373,7 @@ public enum Codes
     Unknown
 }
 
-public sealed record KafkaError(Codes Code, string? Message = null)
-{
+public sealed record KafkaError(Codes Code, string? Message = null) {
     public static KafkaError NotFound => new(Codes.NotFound);
     public static KafkaError AlreadyExists => new(Codes.AlreadyExists);
     public static KafkaError Unknown(string message) => new(Codes.Unknown, message);

@@ -12,10 +12,8 @@ using Microsoft.Data.SqlClient;
 
 namespace Dotfiles.Helpers;
 
-public static class SqlServerHelper
-{
-    public static SqlConnection? BuildSqlServerClient(string? url, string fallbackEnvName = "MSSQL_CONNECTIONSTRING")
-    {
+public static class SqlServerHelper {
+    public static SqlConnection? BuildSqlServerClient(string? url, string fallbackEnvName = "MSSQL_CONNECTIONSTRING") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(url)) return null;
@@ -25,8 +23,7 @@ public static class SqlServerHelper
             : new SqlConnection(url);
     }
 
-    extension(SqlConnection client)
-    {
+    extension(SqlConnection client) {
         /// <summary>
         /// Query DB using JSON mapper
         /// </summary>
@@ -35,8 +32,7 @@ public static class SqlServerHelper
         /// <param name="aggregate">Aggregate query</param>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public async Task<long> AggregateAsync(string sql, List<SqlParameter> parameters, string aggregate)
-        {
+        public async Task<long> AggregateAsync(string sql, List<SqlParameter> parameters, string aggregate) {
             var queryBuilder = new StringBuilder(sql);
             queryBuilder.Insert(0, $"SELECT CAST({aggregate}('') AS BIGINT) AS AggregateValue FROM (");
             queryBuilder.Append(") AS _AggregatedSource");
@@ -57,8 +53,7 @@ public static class SqlServerHelper
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         public async Task<IEnumerable<T>> QueryAsync<T>(string sql, List<SqlParameter> parameters, PagedQuery query,
-            JsonTypeInfo<IEnumerable<T>> jsonConverter)
-        {
+            JsonTypeInfo<IEnumerable<T>> jsonConverter) {
             var offset = (query.PageNumber - 1) * query.PageSize;
             var queryBuilder = new StringBuilder(sql);
             queryBuilder.AppendLine("\nOFFSET @pageOffset ROWS FETCH NEXT @pageSize ROWS ONLY");
@@ -75,50 +70,41 @@ public static class SqlServerHelper
         }
 
         private async Task<object?> QueryInternal(string sql, List<SqlParameter> parameters,
-            string resultName)
-        {
+            string resultName) {
             await using var command = client.CreateCommand();
-            try
-            {
+            try {
                 command.CommandText = sql;
                 command.CommandType = CommandType.Text;
                 parameters.ForEach(p => command.Parameters.Add(p));
                 await using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
+                while (await reader.ReadAsync()) {
                     return reader.GetValue(resultName);
                 }
 
                 return null;
             }
-            finally
-            {
+            finally {
                 command.Parameters.Clear();
             }
         }
     }
 
-    extension(Url url)
-    {
-        public SqlConnection ToSqlServerClient()
-        {
+    extension(Url url) {
+        public SqlConnection ToSqlServerClient() {
             var connectionBuilder = new StringBuilder();
             var host = url.Port is > 0 ? $"{url.Host},{url.Port.Value}" : url.Host;
             connectionBuilder.Append($"Server={host};");
             var database = url.Path?.Trim('/');
             connectionBuilder.Append(!string.IsNullOrEmpty(database) ? $"Database={database};" : "Database=master;");
-            if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password))
-            {
+            if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password)) {
                 connectionBuilder.Append($"User ID={url.Username};");
                 connectionBuilder.Append($"Password={url.Password};");
             }
-            else
-            {
+            else {
                 connectionBuilder.Append("Integrated Security=True;");
             }
 
-            if (url.Extras.TryGetValue("trustServerCertificate", out var trustValue))
-            {
+            if (url.Extras.TryGetValue("trustServerCertificate", out var trustValue)) {
                 var alwaysTrust = (bool.TryParse(trustValue, out var boolValue) && boolValue)
                                   || (int.TryParse(trustValue, out var intValue) && intValue != 0);
                 if (alwaysTrust) connectionBuilder.Append("TrustServerCertificate=True;");
