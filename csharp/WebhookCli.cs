@@ -1,0 +1,265 @@
+#!/usr/bin/env dotnet
+
+#:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
+#:property EnableConfigurationBindingGenerator=true
+#:property AssemblyName=webhook#
+
+#:include helpers/PostgreHelper.cs
+#:include helpers/SqliteHelper.cs
+#:include web/DbHealthCheck.cs
+
+#:package Microsoft.Extensions.Telemetry.Abstractions@10
+
+using System.Data;
+using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Dotfiles.Helpers;
+using Dotfiles.Models;
+using Dotfiles.Web;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
+using Npgsql;
+using DbType = Dotfiles.Models.DbType;
+
+var builder = WebApplication.CreateSlimBuilder(args);
+builder.Logging.ClearProviders();
+if (builder.Environment.IsDevelopment())
+    builder.Logging.AddConsole();
+else
+    builder.Logging.AddJsonConsole();
+builder.Configuration.AddJsonFile("appsettings.json", true);
+builder.Configuration.AddEnvironmentVariables();
+builder.Configuration.AddCommandLine(args);
+builder.Services.AddOptions<AppConfig>().BindConfiguration("App");
+builder.Services.AddOptionsWithValidateOnStart<DbConfig, DbConfigValidator>().BindConfiguration("DB");
+builder.Services.AddScoped<IDbConnection>(provider => {
+    var config = provider.GetRequiredService<IOptions<DbConfig>>().Value;
+    return config.Type switch {
+        DbType.Sqlite =>
+            SqliteHelper.BuildSqliteClient(config.ConnectionString) ??
+            throw new InvalidOperationException(
+                $"Failed to build Sqlite client for connection string: {config.ConnectionString}"),
+        DbType.Postgre =>
+            PostgreHelper.BuildPostgreClient(config.ConnectionString) ??
+            throw new InvalidOperationException(
+                $"Failed to build Postgre client for connection string: {config.ConnectionString}"),
+        _ => throw new InvalidOperationException($"Unsupported DB type: {config.Type}")
+    };
+});
+builder.Services.Configure<ForwardedHeadersOptions>(options => {
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+    // Explicitly allow loopback proxies (Tailscale Serve runs on localhost)
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+builder.Services.AddHostedService<DbMigration>();
+builder.Services.AddProblemDetails();
+builder.Services.AddHealthChecks()
+    .AddCheck("web", () => HealthCheckResult.Healthy(), ["self"])
+    .AddCheck<DbHealthCheck>("db", HealthStatus.Unhealthy, ["dependency"]);
+var app = builder.Build();
+app.MapHealthChecks("/_health", new() { Predicate = check => check.Tags.Contains("self") }).ShortCircuit();
+app.MapHealthChecks("/_health/ready", new() { Predicate = check => check.Tags.Contains("dependency") }).ShortCircuit();
+app.Map("/", () => "POST /webhook/{identifier}");
+app.MapPost("/webhook/{identifier}", ReceiveWebhook);
+using var logFactory = LoggerFactory.Create(log => log.AddConsole());
+var logger = logFactory.CreateLogger<Program>();
+try {
+    await app.RunAsync();
+}
+catch (Exception exception) {
+    logger.LogError(exception, "Unknown error when running application");
+    Environment.Exit(1);
+}
+
+return;
+
+static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier,
+    [FromServices] IOptions<AppConfig> appConfig, [FromServices] IDbConnection db,
+    [FromServices] ILogger<WebhookRequest> logger) {
+    using var body = await JsonDocument.ParseAsync(context.Request.Body);
+    var headers = context.Request.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value.ToArray()));
+    var request = new WebhookRequest {
+        ClientIp = context.GetClientIp() ?? IPAddress.None, Identifier = identifier, Headers = headers, Body = body
+    };
+    var config = appConfig.Value;
+    if (string.IsNullOrWhiteSpace(identifier))
+        return await SaveAndReturn(WebhookResponse.BadRequest("Identifier is required"));
+
+    logger.WebhookReceived(body?.RootElement.GetRawText());
+    if (!string.IsNullOrWhiteSpace(config.SignatureHeader) &&
+        (!headers.TryGetValue(config.SignatureHeader, out var header) || string.IsNullOrWhiteSpace(header))) {
+        logger.SignatureHeaderNotFound(identifier);
+        return await SaveAndReturn(WebhookResponse.BadRequest("Missing signature header"));
+    }
+
+    if (body.IsEmpty()) {
+        logger.NoPayload(identifier);
+        return await SaveAndReturn(WebhookResponse.BadRequest("Empty payload"));
+    }
+
+    return await SaveAndReturn(new WebhookResponse { Code = (int)HttpStatusCode.NoContent });
+
+    async Task<IResult> SaveAndReturn(WebhookResponse response) {
+        request.Response = response;
+        await db.SaveRequest(request);
+        return request.Response.ToHttpResult();
+    }
+}
+
+internal sealed class AppConfig {
+    public required string? SignatureHeader { get; set; }
+}
+
+internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFactory scopeFactory) : BackgroundService {
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
+        logger.LogInformation("Migrating database using {DB}", db.ConnectionString);
+        if (db is NpgsqlConnection postgre)
+            await MigrationPostgre(postgre);
+        else if (db is SqliteConnection sqlite)
+            await MigrateSqlite(sqlite);
+        logger.LogInformation("Database migration completed");
+    }
+
+    private async ValueTask MigrationPostgre(NpgsqlConnection db) {
+        await db.EnsureOpenAsync();
+        await db.ExecuteAsync(
+            """
+            CREATE TABLE IF NOT EXISTS requests (
+                id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                identifier VARCHAR(255) NOT NULL,
+                client_ip INET NOT NULL,
+                headers JSONB NOT NULL,
+                body JSONB NOT NULL,
+                response JSONB NOT NULL
+            );
+            COMMENT ON TABLE requests IS 'Stores incoming webhook requests and their responses';
+            COMMENT ON COLUMN requests.headers IS 'HTTP headers stored as JSON key-value pairs';
+            COMMENT ON COLUMN requests.body IS 'Raw webhook request body';
+            COMMENT ON COLUMN requests.response IS 'WebhookResponse object stored as JSON with code and text fields';
+            """);
+    }
+
+    private async ValueTask MigrateSqlite(SqliteConnection db) {
+        await db.EnsureOpenAsync();
+        await db.ExecuteAsync(
+            """
+            CREATE TABLE IF NOT EXISTS Requests (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ReceivedAt TEXT NOT NULL DEFAULT (datetime('now')),
+                Identifier TEXT NOT NULL,
+                ClientIp TEXT NOT NULL,
+                Headers TEXT NOT NULL,
+                Body TEXT NOT NULL,
+                Response TEXT NOT NULL,
+            );
+            """);
+    }
+}
+
+internal static class Helper {
+    public static bool IsEmpty(this JsonDocument? json) {
+        if (json is not { RootElement: var root }) return true;
+
+        return root.ValueKind switch {
+            JsonValueKind.Undefined => true,
+            JsonValueKind.Object => root.GetPropertyCount() == 0,
+            JsonValueKind.Array => root.GetArrayLength() == 0,
+            JsonValueKind.String => string.IsNullOrWhiteSpace(root.GetString()),
+            JsonValueKind.Null or JsonValueKind.Undefined => true,
+            _ => false
+        };
+    }
+
+    public static IPAddress? GetClientIp(this HttpContext http) {
+        if (http.Request.Headers.TryGetValue("X-Forwarded-For", out var headers) &&
+            headers.FirstOrDefault() is { } header && !string.IsNullOrWhiteSpace(header) &&
+            IPAddress.TryParse(header, out var ip)) {
+            return ip;
+        }
+
+        return http.Connection.RemoteIpAddress;
+    }
+
+    extension(IDbConnection db) {
+        public async ValueTask SaveRequest(WebhookRequest request) {
+            DbParameter[] parameters = [
+                DbParameter.Create("identifier", request.Identifier),
+                DbParameter.Create("ip", request.ClientIp),
+                DbParameter.Create("headers", request.Headers, JsonOpts.Default.DictionaryStringString),
+                DbParameter.Create("body", request.Body),
+                DbParameter.Create("response", request.Response, JsonOpts.Default.WebhookResponse),
+            ];
+            switch (db) {
+                case NpgsqlConnection postgre:
+                    await postgre.EnsureOpenAsync();
+                    await postgre.ExecuteAsync(
+                        """
+                        INSERT INTO requests(client_ip, identifier, headers, body, response)
+                        VALUES(@ip, @identifier, @headers, @body, @response)
+                        """, parameters);
+                    break;
+                case SqliteConnection sqlite:
+                    await sqlite.EnsureOpenAsync();
+                    await sqlite.ExecuteAsync(
+                        """
+                        INSERT INTO Requests(ClientIp, Identifier, Headers, Body, Response)
+                        VALUES(@ip, @identifier, @headers, @body, @response)
+                        """, parameters);
+                    break;
+            }
+        }
+    }
+}
+
+internal sealed class WebhookRequest {
+    public int Id { get; set; }
+    public DateTime ReceivedAt { get; set; }
+    public required string Identifier { get; set; }
+    public required IPAddress ClientIp { get; set; }
+    public required Dictionary<string, string> Headers { get; set; } = [];
+    public required JsonDocument Body { get; set; }
+    public WebhookResponse Response { get; set; } = null!;
+}
+
+internal sealed class WebhookResponse {
+    public required int Code { get; set; }
+    public string? Text { get; set; }
+
+    public static WebhookResponse BadRequest(string reason) =>
+        new() { Code = (int)HttpStatusCode.BadRequest, Text = reason };
+
+    public IResult ToHttpResult() => (HttpStatusCode)Code switch {
+        HttpStatusCode.NotFound => Results.NotFound(Text),
+        HttpStatusCode.BadRequest => Results.BadRequest(Text),
+        HttpStatusCode.OK => Results.Ok(),
+        _ => Results.NoContent()
+    };
+}
+
+[JsonSerializable(typeof(WebhookRequest))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal partial class JsonOpts : JsonSerializerContext;
+
+internal static partial class LoggerExtensions {
+    [LoggerMessage(
+        LogLevel.Information,
+        "Webhook received with body {Body}")]
+#pragma warning disable LOGGEN018 - Let it by stringified
+    public static partial void WebhookReceived(this ILogger logger, string? body);
+#pragma warning restore LOGGEN018
+
+    [LoggerMessage(LogLevel.Information, "No signature header found for identifier {Identifier}")]
+    public static partial void SignatureHeaderNotFound(this ILogger logger, string identifier);
+
+    [LoggerMessage(LogLevel.Warning, "No payload found for identifier {Identifier}")]
+    public static partial void NoPayload(this ILogger logger, string identifier);
+}

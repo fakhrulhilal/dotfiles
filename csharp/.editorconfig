@@ -136,6 +136,9 @@ csharp_new_line_before_members_in_anonymous_types = true
 csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_before_open_brace = none
 csharp_new_line_between_query_expression_clauses = true
+resharper_blank_lines_after_case = 0
+resharper_csharp_keep_blank_lines_in_code = 0
+resharper_csharp_blank_lines_after_case = 0;
 
 # Indentation preferences
 csharp_indent_block_contents = true

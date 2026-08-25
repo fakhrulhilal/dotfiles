@@ -13,7 +13,7 @@ public sealed partial record Url(
     string? Password,
     IReadOnlyDictionary<string, string> Extras) {
     [GeneratedRegex(
-        @"^((?<scheme>[a-zA-Z][a-zA-Z\+]*):\/\/)?(?:(?<username>[^:@\/\s]+)(?::(?<password>[^@\/\s]*))?@)?(?<host>[^:\/\s]+)(?::(?<port>\d+))?(?:\/(?<path>[^\?\s]*))?(?:\?(?<query>[^\s#]*))?$",
+        @"^((?<scheme>[a-zA-Z][a-zA-Z\+]*):\/\/)?(?:(?<username>[a-zA-Z0-9\+=]+)(?::(?<password>[a-zA-Z0-9\+=]*))?@)?(?<host>[a-zA-Z0-9\.\-]+)(?::(?<port>\d+))?(?:\/(?<path>[^\?\s]*))?(?:\?(?<query>[^\s#]*))?$",
         RegexOptions.Compiled)]
     private static partial Regex UrlPattern();
 
