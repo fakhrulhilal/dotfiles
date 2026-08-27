@@ -23,8 +23,8 @@ public abstract class DbParameter {
         new() { Name = name, Value = JsonSerializer.SerializeToDocument(value, jsonConverter) };
 
     public static Json Create(string name, JsonDocument value) => new() { Name = name, Value = value };
-
     public static Bit Create(string name, bool value) => new() { Name = name, Value = value };
+    public static Number Create(string name, int value) => new() { Name = name, Value = value };
     public static Ip Create(string name, IPAddress value) => new() { Name = name, Value = value };
 
     public required string Name { get; init; }

@@ -13,9 +13,11 @@
 
 #:package System.Linq.Async@*
 #:package Microsoft.Extensions.Telemetry.Abstractions@10
+#:package NetEscapades.EnumGenerators@1.0.0-beta21*
 
 using System.Data;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dotfiles.Helpers;
@@ -26,6 +28,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using NetEscapades.EnumGenerators;
 using Npgsql;
 using DbType = Dotfiles.Models.DbType;
 
@@ -65,8 +68,9 @@ var app = builder.Build();
 app.MapHealthChecks("/_health", new() { Predicate = check => check.Tags.Contains("self") }).ShortCircuit();
 app.MapHealthChecks("/_health/ready", new() { Predicate = check => check.Tags.Contains("dependency") }).ShortCircuit();
 app.Map("/", () => "POST /webhook/{identifier}");
-app.MapGet("/webhook/{identifier}", GetWebhookLog);
-app.MapPost("/webhook/{identifier}", ReceiveWebhook);
+app.MapGet("/webhook/{identifier:alpha}/{id:int}/{format:alpha=json}", FormatWebhookLog);
+app.MapGet("/webhook/{identifier:alpha}", GetWebhookLog);
+app.MapPost("/webhook/{identifier:alpha}", ReceiveWebhook);
 try {
     await app.RunAsync();
 }
@@ -77,15 +81,28 @@ catch (Exception exception) {
 
 return;
 
-static async Task GetWebhookLog(string identifier, [FromServices] IDbConnection db,
+static async ValueTask<IResult> FormatWebhookLog(
+    string identifier, int id, string format,
+    [FromServices] IDbConnection db, CancellationToken token = default) {
+    if (!FormatType.TryParse(format, out var formatType, true))
+        return Invalid(nameof(format), $"Unknown format '{format}'");
+    if (await db.GetWebhook(identifier, id, token) is not { } detail) return Results.NotFound();
+
+    return formatType switch {
+        FormatType.Json => Results.Json(detail.ToDto(), WebOpts.Default.WebhookLogDto),
+        FormatType.Curl => Results.Text(detail.ToCurl(), "text/x-shellscript"),
+        FormatType.Fetch => Results.Text(detail.ToFetch(), "text/javascript"),
+        FormatType.Netcat => Results.Text(detail.ToNetcat(), "text/x-shellscript"),
+        _ => Invalid(nameof(format), $"Unsupported format '{format}'")
+    };
+
+    IResult Invalid(string key, string message) => Results.ValidationProblem(
+        new Dictionary<string, string[]> { [key] = [message] });
+}
+
+static async ValueTask GetWebhookLog(string identifier, [FromServices] IDbConnection db,
     HttpContext context, CancellationToken cancellationToken) {
-    var dtoStream = db.GetWebhooks(identifier, cancellationToken).Select(x => new WebhookLogDto {
-        ReceivedAt = x.ReceivedAt,
-        ClientIp = x.ClientIp,
-        Headers = x.Headers,
-        Body = x.Body,
-        Response = x.Response
-    });
+    var dtoStream = db.GetWebhooks(identifier, cancellationToken).Select(x => x.ToDto());
     context.Response.ContentType = "application/json";
     await JsonSerializer.SerializeAsync(
         context.Response.BodyWriter.AsStream(),
@@ -94,7 +111,7 @@ static async Task GetWebhookLog(string identifier, [FromServices] IDbConnection 
         cancellationToken);
 }
 
-static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier,
+static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string identifier,
     [FromServices] IOptions<AppConfig> appConfig, [FromServices] IDbConnection db,
     [FromServices] ILogger<WebhookRequest> logger) {
     using var body = await JsonDocument.ParseAsync(context.Request.Body);
@@ -128,12 +145,17 @@ static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier
 }
 
 internal static class Const {
+    public static readonly StringComparer CompareMode = StringComparer.InvariantCultureIgnoreCase;
+    public static readonly StringComparison CompareMode2 = StringComparison.InvariantCultureIgnoreCase;
     public const int PageSize = 100;
 }
 
 internal sealed class AppConfig {
     public required string? SignatureHeader { get; set; }
 }
+
+[EnumExtensions]
+enum FormatType { Json, Curl, Fetch, Netcat }
 
 internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFactory scopeFactory) : BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -185,6 +207,8 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
 }
 
 internal static class Helper {
+    private static readonly string[] ReservedHeaders = ["Host", "Content-Length"];
+
     public static bool IsEmpty(this JsonDocument? json) {
         if (json is not { RootElement: var root }) return true;
 
@@ -206,7 +230,56 @@ internal static class Helper {
         return http.Connection.RemoteIpAddress;
     }
 
+    private static (string Host, int Port, bool Secure) GetHostAndPort(this Dictionary<string, string> headers,
+        string defaultHost,
+        int defaultPort) {
+        var wrap = new Dictionary<string, string>(headers, Const.CompareMode);
+        if (!wrap.TryGetValue("host", out var hostValue)) return (defaultHost, defaultPort, false);
+
+        wrap.TryGetValue("X-Forwarded-Proto", out var proto);
+        var temp = hostValue.Split(':');
+        var host = !string.IsNullOrWhiteSpace(temp[0]) ? temp[0] : defaultHost;
+        var (port, secure) = (temp, proto?.ToLowerInvariant()) switch {
+            ({ Length: > 1 }, _)when int.TryParse(temp[1], out var portValue) => (portValue, false),
+            (_, "https") => (443, true),
+            (_, "http") => (80, false),
+            _ => (defaultPort, false)
+        };
+        return (host, port, secure);
+    }
+
     extension(IDbConnection db) {
+        public async ValueTask<WebhookRequest?> GetWebhook(
+            string identifier, int id, CancellationToken token = default) {
+            DbParameter[] parameters = [
+                DbParameter.Create("identifier", identifier),
+                DbParameter.Create("id", id)
+            ];
+            return db switch {
+                NpgsqlConnection postgre => await postgre
+                    .QueryAsync(
+                        // language=PostgreSQL
+                        """
+                        SELECT *
+                        FROM requests
+                        WHERE identifier = @identifier AND id = @id
+                        LIMIT 1
+                        """, DbOpts.Default.WebhookRequest, parameters, cancellationToken: token)
+                    .FirstOrDefaultAsync(cancellationToken: token),
+                SqliteConnection sqlite => await sqlite
+                    .QueryAsync(
+                        // language=SQLite
+                        """
+                        SELECT *
+                        FROM requests
+                        WHERE identifier = @identifier AND id = @id
+                        LIMIT 1
+                        """, DbOpts.Default.WebhookRequest, parameters, cancellationToken: token)
+                    .FirstOrDefaultAsync(cancellationToken: token),
+                _ => null
+            };
+        }
+
         public IAsyncEnumerable<WebhookRequest> GetWebhooks(string identifier, CancellationToken token = default) {
             DbParameter[] parameters = [DbParameter.Create("identifier", identifier)];
             switch (db) {
@@ -265,6 +338,116 @@ internal static class Helper {
             }
         }
     }
+
+    extension(WebhookRequest request) {
+        public WebhookLogDto ToDto() => new(
+            request.Id,
+            request.ReceivedAt,
+            request.ClientIp,
+            request.Headers,
+            request.Body,
+            request.Response
+        );
+
+        public string ToCurl() {
+            var builder = new StringBuilder();
+            var (host, port, secure) = request.Headers.GetHostAndPort("localhost", 80);
+            var url = port switch {
+                80 => $"http://{host}",
+                _ when secure => $"https://{host}",
+                _ => $"http://{host}:{port}"
+            };
+            builder.AppendLine($"curl -flis '{url}/webhook/{request.Identifier}' \\");
+            builder.AppendLine($"   --data '{request.Body.RootElement.GetRawText()}' \\");
+            foreach (var (key, value) in request.Headers) {
+                if (ReservedHeaders.Contains(key, Const.CompareMode))
+                    continue;
+
+                if ("User-Agent".Equals(key, Const.CompareMode2))
+                    builder.AppendLine($"    --user-agent '{value}' \\");
+                else
+                    builder.AppendLine($"    -H '{key}: {value}' \\");
+            }
+
+            builder.Length -= 2;
+            return builder.ToString();
+        }
+
+        public string ToFetch() {
+            var (host, port, secure) = request.Headers.GetHostAndPort("localhost", 80);
+            var url = port switch {
+                80 => $"http://{host}",
+                _ when secure => $"https://{host}",
+                _ => $"http://{host}:{port}"
+            };
+            var headerBuilder = new StringBuilder(request.Headers.Count * 10);
+            var indent = new string(' ', 4);
+            foreach (var (key, value) in request.Headers) {
+                if (ReservedHeaders.Contains(key, Const.CompareMode))
+                    continue;
+
+                headerBuilder.Append($"\n{indent}{indent}{indent}'{key}': '{value}',");
+            }
+
+            headerBuilder.Length -= 1;
+            var header = headerBuilder.Length > 0 ? $"headers: {{{headerBuilder}\n{indent}{indent}}}," : string.Empty;
+            return
+                // language=javascript
+                $$"""
+                  try {
+                      const response = await fetch('{{url}}/webhook/{{request.Identifier}}', {
+                          method: 'POST',
+                          {{header}}
+                          body: '{{request.Body.RootElement.GetRawText()}}'
+                      });
+                      if (!response.ok) {
+                          throw new Error(`Response status: ${response.status}`);
+                      }
+
+                      console.log(`response code: ${response.status}`);
+                  } catch (error) {
+                      console.error('[ERROR]', error.message);
+                  }
+                  """;
+        }
+
+        public string ToNetcat() {
+            var builder = new StringBuilder();
+            var (host, port, secure) = request.Headers.GetHostAndPort("localhost", 80);
+            foreach (var (key, value) in request.Headers) {
+                if (ReservedHeaders.Contains(key, Const.CompareMode))
+                    continue;
+
+                builder.AppendLine($"  printf '{key}: {value}\\r\\n'");
+            }
+
+            var command = secure
+                ? $"""openssl s_client -connect "$SERVER":{port} -quiet 2>/dev/null"""
+                : $"""nc "$SERVER" {port}""";
+            return
+                // language=sh
+                $$"""
+                  # Configuration
+                  SERVER="{{host}}"
+                  REQUEST_PATH="/webhook/{{request.Identifier}}"
+                  PAYLOAD='{{request.Body.RootElement.GetRawText()}}'
+
+                  # 1. Calculate payload byte length safely using POSIX wc
+                  # We strip trailing newlines and spaces using standard printf
+                  PAYLOAD_LEN=$(printf '%s' "$PAYLOAD" | wc -c)
+
+                  # 2. Build the HTTP headers and stream the body payload
+                  (
+                    printf 'POST %s HTTP/1.1\r\n' "$REQUEST_PATH"
+                    printf 'Host: %s\r\n' "$SERVER"
+                    printf 'Content-Length: %s\r\n' "$PAYLOAD_LEN"
+                  {{builder}}
+                    printf 'Connection: close\r\n\r\n'
+                    printf '%s' "$PAYLOAD"
+                  ) | {{command}}
+                  """;
+        }
+    }
 }
 
 internal sealed class WebhookRequest {
@@ -280,16 +463,15 @@ internal sealed class WebhookRequest {
     public WebhookResponse Response { get; set; } = null!;
 }
 
-internal sealed class WebhookLogDto {
-    public DateTime ReceivedAt { get; set; }
-
-    [JsonConverter(typeof(IpAddressJsonConverter))]
-    public required IPAddress ClientIp { get; set; }
-
-    public required Dictionary<string, string> Headers { get; set; } = [];
-    public required JsonDocument Body { get; set; }
-    public WebhookResponse Response { get; set; } = null!;
-}
+internal sealed record WebhookLogDto(
+    int Id,
+    DateTime ReceivedAt,
+    [property: JsonConverter(typeof(IpAddressJsonConverter))]
+    IPAddress ClientIp,
+    Dictionary<string, string> Headers,
+    JsonDocument Body,
+    WebhookResponse Response
+);
 
 internal sealed class WebhookResponse {
     public required int Code { get; set; }

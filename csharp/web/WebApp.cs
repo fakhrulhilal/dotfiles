@@ -5,6 +5,7 @@ namespace Dotfiles.Web;
 public static class WebApp {
     public static WebApplicationBuilder CreateBuilder(string[] args) {
         var builder = WebApplication.CreateSlimBuilder(args);
+        builder.WebHost.ConfigureKestrel(opt => opt.AddServerHeader = false);
         var isDevelopment = builder.Environment.IsDevelopment();
         builder.Configuration.Sources.Clear();
         builder.Configuration.AddEnvironmentVariables();
