@@ -6,8 +6,10 @@
 
 #:include helpers/PostgreHelper.cs
 #:include helpers/SqliteHelper.cs
+#:include models/JsonConverters.cs
 #:include web/DbHealthCheck.cs
 
+#:package System.Linq.Async@*
 #:package Microsoft.Extensions.Telemetry.Abstractions@10
 
 using System.Data;
@@ -31,9 +33,9 @@ if (builder.Environment.IsDevelopment())
     builder.Logging.AddConsole();
 else
     builder.Logging.AddJsonConsole();
-builder.Configuration.AddJsonFile("appsettings.json", true);
-builder.Configuration.AddEnvironmentVariables();
-builder.Configuration.AddCommandLine(args);
+builder.Services.ConfigureHttpJsonOptions(options => {
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, WebOpts.Default);
+});
 builder.Services.AddOptions<AppConfig>().BindConfiguration("App");
 builder.Services.AddOptionsWithValidateOnStart<DbConfig, DbConfigValidator>().BindConfiguration("DB");
 builder.Services.AddScoped<IDbConnection>(provider => {
@@ -66,18 +68,33 @@ var app = builder.Build();
 app.MapHealthChecks("/_health", new() { Predicate = check => check.Tags.Contains("self") }).ShortCircuit();
 app.MapHealthChecks("/_health/ready", new() { Predicate = check => check.Tags.Contains("dependency") }).ShortCircuit();
 app.Map("/", () => "POST /webhook/{identifier}");
+app.MapGet("/webhook/{identifier}", GetWebhookLog);
 app.MapPost("/webhook/{identifier}", ReceiveWebhook);
-using var logFactory = LoggerFactory.Create(log => log.AddConsole());
-var logger = logFactory.CreateLogger<Program>();
 try {
     await app.RunAsync();
 }
 catch (Exception exception) {
-    logger.LogError(exception, "Unknown error when running application");
+    Console.Error.WriteLine($"Unknown error when running application: {exception.Message}");
     Environment.Exit(1);
 }
 
 return;
+
+static async Task GetWebhookLog(string identifier, [FromServices] IDbConnection db,
+    HttpContext context, CancellationToken cancellationToken) {
+    var dtoStream = db.GetWebhooks(identifier, cancellationToken).Select(x => new WebhookLogDto {
+        ReceivedAt = x.ReceivedAt,
+        ClientIp = x.ClientIp,
+        Headers = x.Headers,
+        Body = x.Body,
+        Response = x.Response
+    });
+    await JsonSerializer.SerializeAsync(
+        context.Response.BodyWriter.AsStream(),
+        dtoStream,
+        WebOpts.Default.IAsyncEnumerableWebhookLogDto,
+        cancellationToken);
+}
 
 static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier,
     [FromServices] IOptions<AppConfig> appConfig, [FromServices] IDbConnection db,
@@ -112,6 +129,10 @@ static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier
     }
 }
 
+internal static class Const {
+    public const int PageSize = 100;
+}
+
 internal sealed class AppConfig {
     public required string? SignatureHeader { get; set; }
 }
@@ -129,7 +150,6 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
     }
 
     private async ValueTask MigrationPostgre(NpgsqlConnection db) {
-        await db.EnsureOpenAsync();
         await db.ExecuteAsync(
             // language=PostgreSQL
             """
@@ -150,18 +170,17 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
     }
 
     private async ValueTask MigrateSqlite(SqliteConnection db) {
-        await db.EnsureOpenAsync();
         await db.ExecuteAsync(
             // language=SQLite
             """
-            CREATE TABLE IF NOT EXISTS Requests (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ReceivedAt TEXT NOT NULL DEFAULT (datetime('now')),
-                Identifier TEXT NOT NULL,
-                ClientIp TEXT NOT NULL,
-                Headers TEXT NOT NULL,
-                Body TEXT NOT NULL,
-                Response TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                received_at TEXT NOT NULL DEFAULT (datetime('now')),
+                identifier TEXT NOT NULL,
+                client_ip TEXT NOT NULL,
+                headers TEXT NOT NULL,
+                body TEXT NOT NULL,
+                response TEXT NOT NULL
             );
             """);
     }
@@ -190,13 +209,41 @@ internal static class Helper {
     }
 
     extension(IDbConnection db) {
+        public IAsyncEnumerable<WebhookRequest> GetWebhooks(string identifier, CancellationToken token = default) {
+            DbParameter[] parameters = [DbParameter.Create("identifier", identifier)];
+            switch (db) {
+                case NpgsqlConnection postgre:
+                    return postgre.QueryAsync(
+                        // language=PostgreSQL
+                        $"""
+                         SELECT *
+                         FROM requests
+                         WHERE identifier = @identifier
+                         ORDER BY received_at DESC
+                         LIMIT {Const.PageSize}
+                         """, DbOpts.Default.WebhookRequest, parameters, cancellationToken: token);
+                case SqliteConnection sqlite:
+                    return sqlite.QueryAsync(
+                        // language=SQLite
+                        $"""
+                         SELECT *
+                         FROM requests
+                         WHERE identifier = @identifier
+                         ORDER BY received_at DESC
+                         LIMIT {Const.PageSize}
+                         """, DbOpts.Default.WebhookRequest, parameters, cancellationToken: token);
+                default:
+                    return AsyncEnumerable.Empty<WebhookRequest>();
+            }
+        }
+
         public async ValueTask SaveRequest(WebhookRequest request) {
             DbParameter[] parameters = [
                 DbParameter.Create("identifier", request.Identifier),
                 DbParameter.Create("ip", request.ClientIp),
-                DbParameter.Create("headers", request.Headers, JsonOpts.Default.DictionaryStringString),
+                DbParameter.Create("headers", request.Headers, DbOpts.Default.DictionaryStringString),
                 DbParameter.Create("body", request.Body),
-                DbParameter.Create("response", request.Response, JsonOpts.Default.WebhookResponse),
+                DbParameter.Create("response", request.Response, DbOpts.Default.WebhookResponse),
             ];
             switch (db) {
                 case NpgsqlConnection postgre:
@@ -213,7 +260,7 @@ internal static class Helper {
                     await sqlite.ExecuteAsync(
                         // language=SQLite
                         """
-                        INSERT INTO Requests(ClientIp, Identifier, Headers, Body, Response)
+                        INSERT INTO Requests(client_ip, identifier, headers, body, response)
                         VALUES(@ip, @identifier, @headers, @body, @response)
                         """, parameters);
                     break;
@@ -226,7 +273,21 @@ internal sealed class WebhookRequest {
     public int Id { get; set; }
     public DateTime ReceivedAt { get; set; }
     public required string Identifier { get; set; }
+
+    [JsonConverter(typeof(IpAddressJsonConverter))]
     public required IPAddress ClientIp { get; set; }
+
+    public required Dictionary<string, string> Headers { get; set; } = [];
+    public required JsonDocument Body { get; set; }
+    public WebhookResponse Response { get; set; } = null!;
+}
+
+internal sealed class WebhookLogDto {
+    public DateTime ReceivedAt { get; set; }
+
+    [JsonConverter(typeof(IpAddressJsonConverter))]
+    public required IPAddress ClientIp { get; set; }
+
     public required Dictionary<string, string> Headers { get; set; } = [];
     public required JsonDocument Body { get; set; }
     public WebhookResponse Response { get; set; } = null!;
@@ -248,8 +309,13 @@ internal sealed class WebhookResponse {
 }
 
 [JsonSerializable(typeof(WebhookRequest))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+internal partial class DbOpts : JsonSerializerContext;
+
+[JsonSerializable(typeof(WebhookLogDto))]
+[JsonSerializable(typeof(IAsyncEnumerable<WebhookLogDto>))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal partial class JsonOpts : JsonSerializerContext;
+internal partial class WebOpts : JsonSerializerContext;
 
 internal static partial class LoggerExtensions {
     [LoggerMessage(

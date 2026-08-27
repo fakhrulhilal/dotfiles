@@ -4,6 +4,9 @@
 #:package Npgsql@10.0.3
 
 using System.Data;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Dotfiles.Models;
 using Npgsql;
 using NpgsqlTypes;
@@ -102,6 +105,15 @@ public static class PostgreHelper {
         }
     };
 
+    private static string WrapSqlQuery(string rawSql) =>
+        // language=PostgreSQL
+        $"""
+         SELECT row_to_json(__q__) 
+         FROM (
+             {rawSql}
+         ) __q__
+         """;
+
     public static NpgsqlConnection? BuildPostgreClient(string? url, string fallbackEnvName = "DATABASE_URL") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
@@ -119,6 +131,7 @@ public static class PostgreHelper {
 
         public async ValueTask<int> ExecuteAsync(string sql, IReadOnlyList<DbParameter>? parameters = null,
             IDbTransaction? transaction = null) {
+            await db.EnsureOpenAsync();
             await using var command = db.CreateCommand();
             if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
             command.Transaction = transaction switch {
@@ -128,6 +141,40 @@ public static class PostgreHelper {
             };
             command.CommandText = sql;
             return await command.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Streams database records as strongly typed objects using JSON converter.
+        /// </summary>
+        /// <param name="sql">SQL query having resultset</param>
+        /// <param name="jsonTypeInfo">JSON converter</param>
+        /// <param name="parameters">SQL query parameters</param>
+        /// <param name="transaction">Optional DB transaction</param>
+        /// <param name="cancellationToken"></param>
+        public async IAsyncEnumerable<T> QueryAsync<T>(
+            string sql, JsonTypeInfo<T> jsonTypeInfo,
+            IReadOnlyList<DbParameter>? parameters = null, IDbTransaction? transaction = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default) {
+            await db.EnsureOpenAsync();
+            await using var command = db.CreateCommand();
+            command.CommandText = WrapSqlQuery(sql);
+            if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
+            command.Transaction = transaction switch {
+                null => null,
+                NpgsqlTransaction npgsqlTransaction => npgsqlTransaction,
+                _ => throw new InvalidOperationException("Only accept transaction with same DB")
+            };
+
+            // SequentialAccess prevents the driver from buffering entire rows/payloads in RAM
+            await using var reader =
+                await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
+            while (await reader.ReadAsync(cancellationToken)) {
+                if (reader.IsDBNull(0)) continue;
+
+                await using var stream = await reader.GetStreamAsync(0, cancellationToken);
+                var item = await JsonSerializer.DeserializeAsync(stream, jsonTypeInfo, cancellationToken);
+                if (item is not null) yield return item;
+            }
         }
 
         private void PopulateParameters(NpgsqlCommand command, IReadOnlyList<DbParameter> parameters) {

@@ -4,13 +4,20 @@
 #:package Microsoft.Data.Sqlite@10.0.11
 
 using System.Data;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+using System.Text.RegularExpressions;
 using Dotfiles.Models;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 using DbParameter = Dotfiles.Models.DbParameter;
 
 namespace Dotfiles.Helpers;
 
-public static class SqliteHelper {
+public static partial class SqliteHelper {
+    private static readonly Regex WithRegex = WithPattern();
+
     public static SqliteConnection? BuildSqliteClient(string? url, string fallbackEnvName = "DATABASE_URL") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
@@ -20,6 +27,28 @@ public static class SqliteHelper {
             ? parsedUrl.ToSqliteClient()
             : new SqliteConnection(url);
     }
+
+    private static string WrapSqlQuery(string rawSql) {
+        // SQLite 3.38+ supports json_object() combined with subquery results.
+        // If a CTE exists at the top level, extract and lift it to avoid syntax errors inside the subquery.
+        return WithRegex.IsMatch(rawSql)
+            // language=sqlite
+            ? $"""
+               WITH __user_cte__ AS (
+                   {rawSql}
+               )
+               SELECT json_object(*) FROM __user_cte__
+               """
+            : $"""
+               SELECT json_object(*) 
+               FROM (
+                   {rawSql}
+               ) __q__
+               """;
+    }
+
+    [GeneratedRegex(@"^\s*WITH\s+", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex WithPattern();
 
     extension(SqliteConnection db) {
         public async ValueTask EnsureOpenAsync() {
@@ -37,6 +66,39 @@ public static class SqliteHelper {
             };
             command.CommandText = sql;
             return await command.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Streams database records as strongly typed objects using JSON converter.
+        /// </summary>
+        /// <param name="sql">SQL query having resultset</param>
+        /// <param name="jsonTypeInfo">JSON converter</param>
+        /// <param name="parameters">SQL query parameters</param>
+        /// <param name="transaction">Optional DB transaction</param>
+        /// <param name="cancellationToken"></param>
+        public async IAsyncEnumerable<T> QueryAsync<T>(
+            string sql, JsonTypeInfo<T> jsonTypeInfo,
+            IReadOnlyList<DbParameter>? parameters = null, IDbTransaction? transaction = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default) {
+            await using var command = db.CreateCommand();
+            command.CommandText = WrapSqlQuery(sql);
+            if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
+            command.Transaction = transaction switch {
+                null => null,
+                SqliteTransaction sqliteTransaction => sqliteTransaction,
+                _ => throw new InvalidOperationException("Only accept transaction with same DB")
+            };
+
+            // SequentialAccess prevents the driver from buffering entire rows/payloads in RAM
+            await using var reader =
+                await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
+            while (await reader.ReadAsync(cancellationToken)) {
+                if (reader.IsDBNull(0)) continue;
+
+                await using var stream = reader.GetStream(0);
+                var item = await JsonSerializer.DeserializeAsync(stream, jsonTypeInfo, cancellationToken);
+                if (item is not null) yield return item;
+            }
         }
 
         private void PopulateParameters(SqliteCommand command, IReadOnlyList<DbParameter> parameters) {
