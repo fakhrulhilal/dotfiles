@@ -131,6 +131,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
     private async ValueTask MigrationPostgre(NpgsqlConnection db) {
         await db.EnsureOpenAsync();
         await db.ExecuteAsync(
+            // language=PostgreSQL
             """
             CREATE TABLE IF NOT EXISTS requests (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -151,6 +152,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
     private async ValueTask MigrateSqlite(SqliteConnection db) {
         await db.EnsureOpenAsync();
         await db.ExecuteAsync(
+            // language=SQLite
             """
             CREATE TABLE IF NOT EXISTS Requests (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,7 +161,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
                 ClientIp TEXT NOT NULL,
                 Headers TEXT NOT NULL,
                 Body TEXT NOT NULL,
-                Response TEXT NOT NULL,
+                Response TEXT NOT NULL
             );
             """);
     }
@@ -202,6 +204,7 @@ internal static class Helper {
                 case NpgsqlConnection postgre:
                     await postgre.EnsureOpenAsync();
                     await postgre.ExecuteAsync(
+                        // language=PostgreSQL
                         """
                         INSERT INTO requests(client_ip, identifier, headers, body, response)
                         VALUES(@ip, @identifier, @headers, @body, @response)
@@ -210,6 +213,7 @@ internal static class Helper {
                 case SqliteConnection sqlite:
                     await sqlite.EnsureOpenAsync();
                     await sqlite.ExecuteAsync(
+                        // language=SQLite
                         """
                         INSERT INTO Requests(ClientIp, Identifier, Headers, Body, Response)
                         VALUES(@ip, @identifier, @headers, @body, @response)

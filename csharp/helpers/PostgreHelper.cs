@@ -7,15 +7,100 @@ using System.Data;
 using Dotfiles.Models;
 using Npgsql;
 using NpgsqlTypes;
+using ConnectionBuilder = Npgsql.NpgsqlConnectionStringBuilder;
 
 namespace Dotfiles.Helpers;
+
+delegate void ConfigFactory(string value, ConnectionBuilder config);
 
 public static class PostgreHelper {
     private readonly struct Defaults {
         public const string Host = "localhost";
         public const int Port = 5432;
         public const string Database = "postgres";
+        public static readonly StringComparer CompareMode = StringComparer.InvariantCultureIgnoreCase;
     }
+
+    private static ConfigFactory SetBool(Action<ConnectionBuilder, bool> setter) {
+        return (value, config) => {
+            if (bool.TryParse(value, out var result)) setter(config, result);
+            else if (int.TryParse(value, out var intValue)) setter(config, intValue != 0);
+        };
+    }
+
+    private static ConfigFactory SetInt(Action<ConnectionBuilder, int> setter) {
+        return (value, config) => {
+            if (int.TryParse(value, out var result)) setter(config, result);
+        };
+    }
+
+    private static ConfigFactory SetString(Action<ConnectionBuilder, string> setter) {
+        return (value, config) => {
+            if (!string.IsNullOrWhiteSpace(value)) setter(config, value);
+        };
+    }
+
+    private static ConfigFactory SetEnum<TValue>(Action<ConnectionBuilder, TValue> setter)
+        where TValue : struct, Enum {
+        return (value, config) => {
+            if (Enum.TryParse(value, out TValue result)) setter(config, result);
+        };
+    }
+
+    private static readonly Dictionary<string, ConfigFactory> ConfigFactories = new(Defaults.CompareMode) {
+        ["passfile"] = SetString((cfg, val) => cfg.Passfile = val),
+        ["require_auth"] = SetString((cfg, val) => cfg.RequireAuth = val),
+        ["channel_binding"] = SetEnum<ChannelBinding>((cfg, val) => cfg.ChannelBinding = val),
+        ["timeout"] = SetInt((cfg, val) => cfg.Timeout = val),
+        ["connect_timeout"] = SetInt((cfg, val) => cfg.Timeout = val),
+        ["command_timeout"] = SetInt((cfg, val) => cfg.CommandTimeout = val),
+        ["client_encoding"] = SetString((cfg, val) => cfg.ClientEncoding = val),
+        ["application_name"] = SetString((cfg, val) => cfg.ApplicationName = val),
+        ["keepalives"] = SetBool((cfg, val) => cfg.TcpKeepAlive = val),
+        ["keepalives_interval"] = SetInt((cfg, val) => cfg.TcpKeepAliveInterval = val),
+        ["keepalives_count"] = SetInt((cfg, val) => cfg.KeepAlive = val),
+        ["gssencmode"] = SetEnum<GssEncryptionMode>((cfg, val) => cfg.GssEncryptionMode = val),
+        ["sslmode"] = SetEnum<SslMode>((cfg, val) => cfg.SslMode = val),
+        ["sslnegotiation"] = SetEnum<SslNegotiation>((cfg, val) => cfg.SslNegotiation = val),
+        ["sslcert"] = SetString((cfg, val) => cfg.SslCertificate = val),
+        ["sslkey"] = SetString((cfg, val) => cfg.SslKey = val),
+        ["sslpassword"] = SetString((cfg, val) => cfg.SslPassword = val),
+        ["sslrootcert"] = SetString((cfg, val) => cfg.RootCertificate = val),
+    };
+
+    private static ConfigFactory SetEnvString(Action<ConnectionBuilder, string> setter, string? fallback = null) {
+        return (envName, config) => {
+            var value = Environment.GetEnvironmentVariable(envName) ?? fallback;
+            if (!string.IsNullOrWhiteSpace(value)) setter(config, value);
+        };
+    }
+
+    private static readonly Dictionary<string, ConfigFactory> EnvFactories = new(Defaults.CompareMode) {
+        ["PGHOST"] = SetEnvString((cfg, val) => cfg.Host = val, Defaults.Host),
+        ["PGDATABASE"] = SetEnvString((cfg, val) => cfg.Database = val, Defaults.Database),
+        ["PGPORT"] = (envName, cfg) => {
+            var value = Environment.GetEnvironmentVariable(envName);
+            cfg.Port = !string.IsNullOrWhiteSpace(value) && int.TryParse(value, out var result)
+                ? result
+                : Defaults.Port;
+        },
+        ["PGUSER"] = SetEnvString((cfg, val) => cfg.Username = val),
+        ["PGPASSWORD"] = SetEnvString((cfg, val) => cfg.Password = val),
+        ["PGPASSFILE"] = SetEnvString((cfg, val) => cfg.Passfile = val),
+        ["PGSSLCERT"] = SetEnvString((cfg, val) => cfg.SslCertificate = val),
+        ["PGSSLKEY"] = SetEnvString((cfg, val) => cfg.SslKey = val),
+        ["PGSSLROOTCERT"] = SetEnvString((cfg, val) => cfg.RootCertificate = val),
+        ["PGCLIENTENCODING"] = SetEnvString((cfg, val) => cfg.ClientEncoding = val),
+        ["TZ"] = SetEnvString((cfg, val) => cfg.Timezone = val),
+        ["PGTZ"] = SetEnvString((cfg, val) => cfg.Timezone = val),
+        ["PGAPPNAME"] = SetEnvString((cfg, val) => cfg.ApplicationName = val),
+        ["PGSSLNEGOTIATION"] = (envName, cfg) => {
+            var value = Environment.GetEnvironmentVariable(envName);
+            if (!string.IsNullOrWhiteSpace(value) &&
+                Enum.TryParse<SslNegotiation>(value, true, out var result))
+                cfg.SslNegotiation = result;
+        }
+    };
 
     public static NpgsqlConnection? BuildPostgreClient(string? url, string fallbackEnvName = "DATABASE_URL") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
@@ -83,47 +168,20 @@ public static class PostgreHelper {
 
     extension(Url url) {
         public NpgsqlConnection ToPostgreClient() {
-            var builder = new NpgsqlConnectionStringBuilder {
-                Host = !string.IsNullOrEmpty(url.Host)
-                    ? url.Host
-                    : Environment.GetEnvironmentVariable("PGHOST") ?? Defaults.Host,
-                Port = url.Port switch {
-                    > 0 => url.Port.Value,
-                    _ when int.TryParse(Environment.GetEnvironmentVariable("PGPORT"), out var tmpPort) &&
-                           tmpPort > 0 => tmpPort,
-                    _ => Defaults.Port
-                }
-            };
+            var builder = new ConnectionBuilder();
+            foreach (var (envName, setFromEnv) in EnvFactories) setFromEnv(envName, builder);
+            if (!string.IsNullOrEmpty(url.Host)) builder.Host = url.Host;
+            if (url is { Port: > 0 }) builder.Port = url.Port.Value;
             var database = url.Path?.Trim('/');
-            builder.Database = !string.IsNullOrEmpty(database)
-                ? database
-                : Environment.GetEnvironmentVariable("PGDATABASE") ?? Defaults.Database;
+            if (string.IsNullOrEmpty(database)) builder.Database = database;
             if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password)) {
                 builder.Username = url.Username;
                 builder.Password = url.Password;
             }
-            else {
-                if (Environment.GetEnvironmentVariable("PGUSER") is { } tmpUser && !string.IsNullOrEmpty(tmpUser))
-                    builder.Username = tmpUser;
-                if (Environment.GetEnvironmentVariable("PGPASSWORD") is { } tmpPass && !string.IsNullOrEmpty(tmpPass))
-                    builder.Password = tmpPass;
-            }
 
             foreach (var (key, value) in url.Extras) {
-                switch (key.ToLowerInvariant()) {
-                    case "sslmode" when Enum.TryParse<SslMode>(value, out var sslMode):
-                        builder.SslMode = sslMode;
-                        break;
-                    case "applicationname":
-                        builder.ApplicationName = value;
-                        break;
-                    case "timeout" when int.TryParse(value, out var timeout):
-                        builder.Timeout = timeout;
-                        break;
-                    case "commandtimeout":
-                        builder.CommandTimeout = 1;
-                        break;
-                }
+                if (ConfigFactories.TryGetValue(key, out var factory))
+                    factory(value, builder);
             }
 
             var connectionString = builder.ToString();
