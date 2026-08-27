@@ -2,12 +2,14 @@
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
 #:property EnableConfigurationBindingGenerator=true
-#:property AssemblyName=webhook#
+#:property NoWarn=NU1510,CS2002
+#:property StripSymbols=true
 
 #:include helpers/PostgreHelper.cs
 #:include helpers/SqliteHelper.cs
 #:include models/JsonConverters.cs
 #:include web/DbHealthCheck.cs
+#:include web/WebApp.cs
 
 #:package System.Linq.Async@*
 #:package Microsoft.Extensions.Telemetry.Abstractions@10
@@ -27,12 +29,7 @@ using Microsoft.Extensions.Options;
 using Npgsql;
 using DbType = Dotfiles.Models.DbType;
 
-var builder = WebApplication.CreateSlimBuilder(args);
-builder.Logging.ClearProviders();
-if (builder.Environment.IsDevelopment())
-    builder.Logging.AddConsole();
-else
-    builder.Logging.AddJsonConsole();
+var builder = WebApp.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options => {
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, WebOpts.Default);
 });
@@ -318,10 +315,10 @@ internal partial class DbOpts : JsonSerializerContext;
 internal partial class WebOpts : JsonSerializerContext;
 
 internal static partial class LoggerExtensions {
+#pragma warning disable LOGGEN018 - Let it by stringified
     [LoggerMessage(
         LogLevel.Information,
         "Webhook received with body {Body}")]
-#pragma warning disable LOGGEN018 - Let it by stringified
     public static partial void WebhookReceived(this ILogger logger, string? body);
 #pragma warning restore LOGGEN018
 

@@ -1,6 +1,6 @@
 #:include ../models/DbConfig.cs
 
-#:sdk Microsoft.NET.Sdk.Web
+#:package Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions@10
 
 using System.Data;
 using Dotfiles.Models;
