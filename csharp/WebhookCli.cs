@@ -86,6 +86,7 @@ static async Task GetWebhookLog(string identifier, [FromServices] IDbConnection 
         Body = x.Body,
         Response = x.Response
     });
+    context.Response.ContentType = "application/json";
     await JsonSerializer.SerializeAsync(
         context.Response.BodyWriter.AsStream(),
         dtoStream,
