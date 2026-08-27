@@ -37,6 +37,181 @@ internal static class KafkaHelper {
 
     private static void WriteToConsole(IAdminClient _, LogMessage log) => log.ToConsole();
 
+    private static Action<string, TConfig> SetBool<TConfig>(Action<TConfig, bool> setter) {
+        return (value, config) => {
+            if (bool.TryParse(value, out var result)) setter(config, result);
+            else if (int.TryParse(value, out var intValue)) setter(config, intValue != 0);
+        };
+    }
+
+    private static Action<string, TConfig> SetInt<TConfig>(Action<TConfig, int> setter) {
+        return (value, config) => {
+            if (int.TryParse(value, out var result)) setter(config, result);
+        };
+    }
+
+    private static Action<string, TConfig> SetDouble<TConfig>(Action<TConfig, double> setter) {
+        return (value, config) => {
+            if (double.TryParse(value, out var result)) setter(config, result);
+        };
+    }
+
+    private static Action<string, TConfig> SetString<TConfig>(Action<TConfig, string> setter) {
+        return (value, config) => {
+            if (!string.IsNullOrWhiteSpace(value)) setter(config, value);
+        };
+    }
+
+    private static Action<string, TConfig> SetEnum<TConfig, TValue>(Action<TConfig, TValue> setter)
+        where TValue : struct, Enum {
+        return (value, config) => {
+            if (Enum.TryParse(value, out TValue result)) setter(config, result);
+        };
+    }
+
+    private static readonly Dictionary<string, Action<string, ClientConfig>> ConfigFactories =
+        new(StringComparer.InvariantCultureIgnoreCase) {
+            ["sasl.mechanism"] = (value, config) => {
+                SaslMechanism? parsed = value.ToUpperInvariant() switch {
+                    var val when string.IsNullOrEmpty(val) => null,
+                    var val when Enum.TryParse<SaslMechanism>(val, true, out var result) => result,
+                    "SCRAM-SHA-256" => SaslMechanism.ScramSha256,
+                    "SCRAM-SHA-512" => SaslMechanism.ScramSha512,
+                    _ => null
+                };
+                if (parsed != null) config.SaslMechanism = parsed;
+            },
+            ["acks"] = (value, config) => {
+                var parsed = value switch {
+                    null => null,
+                    "0" => Acks.None,
+                    "1" => Acks.Leader,
+                    "-1" => Acks.All,
+                    var val when "all".Equals(val, StringComparison.InvariantCultureIgnoreCase) => Acks.All,
+                    _ when int.TryParse(value, out var result) => (Acks?)result,
+                    _ => null
+                };
+                if (parsed != null) config.Acks = parsed;
+            },
+            ["client.id"] = SetString<ClientConfig>((cfg, val) => cfg.ClientId = val),
+            ["message.max.bytes"] = SetInt<ClientConfig>((cfg, val) => cfg.MessageMaxBytes = val),
+            ["message.copy.max.bytes"] = SetInt<ClientConfig>((cfg, val) => cfg.MessageCopyMaxBytes = val),
+            ["receive.message.max.bytes"] = SetInt<ClientConfig>((cfg, val) => cfg.ReceiveMessageMaxBytes = val),
+            ["max.in.flight"] = SetInt<ClientConfig>((cfg, val) => cfg.MaxInFlight = val),
+            ["topic.metadata.refresh.interval.ms"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.TopicMetadataRefreshIntervalMs = val),
+            ["metadata.max.age.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.MetadataMaxAgeMs = val),
+            ["topic.metadata.refresh.fast.interval.ms"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.TopicMetadataRefreshFastIntervalMs = val),
+            ["topic.metadata.refresh.sparse"] =
+                SetBool<ClientConfig>((cfg, val) => cfg.TopicMetadataRefreshSparse = val),
+            ["topic.metadata.propagation.max.ms"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.TopicMetadataPropagationMaxMs = val),
+            ["socket.timeout.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.SocketTimeoutMs = val),
+            ["socket.send.buffer.bytes"] = SetInt<ClientConfig>((cfg, val) => cfg.SocketSendBufferBytes = val),
+            ["socket.receive.buffer.bytes"] = SetInt<ClientConfig>((cfg, val) => cfg.SocketReceiveBufferBytes = val),
+            ["socket.keepalive.enable"] = SetBool<ClientConfig>((cfg, val) => cfg.SocketKeepaliveEnable = val),
+            ["socket.nagle.disable"] = SetBool<ClientConfig>((cfg, val) => cfg.SocketNagleDisable = val),
+            ["socket.max.fails"] = SetInt<ClientConfig>((cfg, val) => cfg.SocketMaxFails = val),
+            ["broker.address.ttl"] = SetInt<ClientConfig>((cfg, val) => cfg.BrokerAddressTtl = val),
+            ["socket.connection.setup.timeout.ms"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.SocketConnectionSetupTimeoutMs = val),
+            ["connections.max.idle.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.ConnectionsMaxIdleMs = val),
+            ["reconnect.backoff.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.ReconnectBackoffMs = val),
+            ["reconnect.backoff.max.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.ReconnectBackoffMaxMs = val),
+            ["statistics.interval.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.StatisticsIntervalMs = val),
+            ["log.queue"] = SetBool<ClientConfig>((cfg, val) => cfg.LogQueue = val),
+            ["log.thread.name"] = SetBool<ClientConfig>((cfg, val) => cfg.LogThreadName = val),
+            ["enable.random.seed"] = SetBool<ClientConfig>((cfg, val) => cfg.EnableRandomSeed = val),
+            ["log.connection.close"] = SetBool<ClientConfig>((cfg, val) => cfg.LogConnectionClose = val),
+            ["internal.termination.signal"] = SetInt<ClientConfig>((cfg, val) => cfg.InternalTerminationSignal = val),
+            ["api.version.request"] = SetBool<ClientConfig>((cfg, val) => cfg.ApiVersionRequest = val),
+            ["api.version.request.timeout.ms"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.ApiVersionRequestTimeoutMs = val),
+            ["api.version.fallback.ms"] = SetInt<ClientConfig>((cfg, val) => cfg.ApiVersionFallbackMs = val),
+            ["broker.version.fallback"] = SetString<ClientConfig>((cfg, val) => cfg.BrokerVersionFallback = val),
+            ["allow.auto.create.topics"] = SetBool<ClientConfig>((cfg, val) => cfg.AllowAutoCreateTopics = val),
+            ["security.protocol"] = SetEnum<ClientConfig, SecurityProtocol>((cfg, val) => cfg.SecurityProtocol = val),
+            ["ssl.cipher.suites"] = SetString<ClientConfig>((cfg, val) => cfg.SslCipherSuites = val),
+            ["ssl.curves.list"] = SetString<ClientConfig>((cfg, val) => cfg.SslCurvesList = val),
+            ["ssl.sigalgs.list"] = SetString<ClientConfig>((cfg, val) => cfg.SslSigalgsList = val),
+            ["ssl.key.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslKeyLocation = val),
+            ["ssl.key.password"] = SetString<ClientConfig>((cfg, val) => cfg.SslKeyPassword = val),
+            ["ssl.key.pem"] = SetString<ClientConfig>((cfg, val) => cfg.SslKeyPem = val),
+            ["ssl.certificate.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslCertificateLocation = val),
+            ["ssl.certificate.pem"] = SetString<ClientConfig>((cfg, val) => cfg.SslCertificatePem = val),
+            ["ssl.ca.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslCaLocation = val),
+            ["ssl.ca.pem"] = SetString<ClientConfig>((cfg, val) => cfg.SslCaPem = val),
+            ["ssl.ca.certificate.stores"] = SetString<ClientConfig>((cfg, val) => cfg.SslCaCertificateStores = val),
+            ["ssl.crl.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslCrlLocation = val),
+            ["ssl.keystore.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslKeystoreLocation = val),
+            ["ssl.keystore.password"] = SetString<ClientConfig>((cfg, val) => cfg.SslKeystorePassword = val),
+            ["ssl.providers"] = SetString<ClientConfig>((cfg, val) => cfg.SslProviders = val),
+            ["ssl.engine.location"] = SetString<ClientConfig>((cfg, val) => cfg.SslEngineLocation = val),
+            ["ssl.engine.id"] = SetString<ClientConfig>((cfg, val) => cfg.SslEngineId = val),
+            ["enable.ssl.certificate.verification"] =
+                SetBool<ClientConfig>((cfg, val) => cfg.EnableSslCertificateVerification = val),
+            ["ssl.endpoint.identification.algorithm"] =
+                SetEnum<ClientConfig, SslEndpointIdentificationAlgorithm>((cfg, val) =>
+                    cfg.SslEndpointIdentificationAlgorithm = val),
+            ["sasl.kerberos.service.name"] = SetString<ClientConfig>((cfg, val) => cfg.SaslKerberosServiceName = val),
+            ["sasl.kerberos.principal"] = SetString<ClientConfig>((cfg, val) => cfg.SaslKerberosPrincipal = val),
+            ["sasl.kerberos.kinit.cmd"] = SetString<ClientConfig>((cfg, val) => cfg.SaslKerberosKinitCmd = val),
+            ["sasl.kerberos.keytab"] = SetString<ClientConfig>((cfg, val) => cfg.SaslKerberosKeytab = val),
+            ["sasl.kerberos.min.time.before.relogin"] =
+                SetInt<ClientConfig>((cfg, val) => cfg.SaslKerberosMinTimeBeforeRelogin = val),
+            ["sasl.username"] = SetString<ClientConfig>((cfg, val) => cfg.SaslUsername = val),
+            ["sasl.password"] = SetString<ClientConfig>((cfg, val) => cfg.SaslPassword = val),
+            ["sasl.oauthbearer.config"] = SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerConfig = val),
+            ["enable.sasl.oauthbearer.unsecure.jwt"] =
+                SetBool<ClientConfig>((cfg, val) => cfg.EnableSaslOauthbearerUnsecureJwt = val),
+            ["sasl.oauthbearer.method"] =
+                SetEnum<ClientConfig, SaslOauthbearerMethod>((cfg, val) => cfg.SaslOauthbearerMethod = val),
+            ["sasl.oauthbearer.client.id"] = SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerClientId = val),
+            ["sasl.oauthbearer.client.secret"] =
+                SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerClientSecret = val),
+            ["sasl.oauthbearer.scope"] = SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerScope = val),
+            ["sasl.oauthbearer.extensions"] =
+                SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerExtensions = val),
+            ["sasl.oauthbearer.token.endpoint.url"] =
+                SetString<ClientConfig>((cfg, val) => cfg.SaslOauthbearerTokenEndpointUrl = val),
+            ["plugin.library.paths"] = SetString<ClientConfig>((cfg, val) => cfg.PluginLibraryPaths = val),
+            ["client.rack"] = SetString<ClientConfig>((cfg, val) => cfg.ClientRack = val),
+            ["client.dns.lookup"] = SetEnum<ClientConfig, ClientDnsLookup>((cfg, val) => cfg.ClientDnsLookup = val),
+        };
+
+    private static readonly Dictionary<string, Action<string, ProducerConfig>> ProducerConfigFactories =
+        new(StringComparer.InvariantCultureIgnoreCase) {
+            ["dotnet.producer.enable.background.poll"] =
+                SetBool<ProducerConfig>((cfg, val) => cfg.EnableBackgroundPoll = val),
+            ["dotnet.producer.enable.delivery.reports"] =
+                SetBool<ProducerConfig>((cfg, val) => cfg.EnableDeliveryReports = val),
+            ["dotnet.producer.delivery.report.fields"] =
+                SetString<ProducerConfig>((cfg, val) => cfg.DeliveryReportFields = val),
+            ["request.timeout.ms"] = SetInt<ProducerConfig>((cfg, val) => cfg.RequestTimeoutMs = val),
+            ["message.timeout.ms"] = SetInt<ProducerConfig>((cfg, val) => cfg.MessageTimeoutMs = val),
+            ["partitioner"] = SetEnum<ProducerConfig, Partitioner>((cfg, val) => cfg.Partitioner = val),
+            ["compression.level"] = SetInt<ProducerConfig>((cfg, val) => cfg.CompressionLevel = val),
+            ["transactional.id"] = SetString<ProducerConfig>((cfg, val) => cfg.TransactionalId = val),
+            ["transaction.timeout.ms"] = SetInt<ProducerConfig>((cfg, val) => cfg.TransactionTimeoutMs = val),
+            ["enable.idempotence"] = SetBool<ProducerConfig>((cfg, val) => cfg.EnableIdempotence = val),
+            ["enable.gapless.guarantee"] = SetBool<ProducerConfig>((cfg, val) => cfg.EnableGaplessGuarantee = val),
+            ["queue.buffering.max.messages"] =
+                SetInt<ProducerConfig>((cfg, val) => cfg.QueueBufferingMaxMessages = val),
+            ["queue.buffering.max.kbytes"] = SetInt<ProducerConfig>((cfg, val) => cfg.QueueBufferingMaxKbytes = val),
+            ["linger.ms"] = SetDouble<ProducerConfig>((cfg, val) => cfg.LingerMs = val),
+            ["message.send.max.retries"] = SetInt<ProducerConfig>((cfg, val) => cfg.MessageSendMaxRetries = val),
+            ["retry.backoff.ms"] = SetInt<ProducerConfig>((cfg, val) => cfg.RetryBackoffMs = val),
+            ["retry.backoff.max.ms"] = SetInt<ProducerConfig>((cfg, val) => cfg.RetryBackoffMaxMs = val),
+            ["queue.buffering.backpressure.threshold"] =
+                SetInt<ProducerConfig>((cfg, val) => cfg.QueueBufferingBackpressureThreshold = val),
+            ["compression.type"] = SetEnum<ProducerConfig, CompressionType>((cfg, val) => cfg.CompressionType = val),
+            ["batch.num.messages"] = SetInt<ProducerConfig>((cfg, val) => cfg.BatchNumMessages = val),
+            ["batch.size"] = SetInt<ProducerConfig>((cfg, val) => cfg.BatchSize = val),
+            ["sticky.partitioning.linger.ms"] =
+                SetInt<ProducerConfig>((cfg, val) => cfg.StickyPartitioningLingerMs = val),
+        };
+
     public static IProducer<TKey, TMessage>? BuildKafkaProducerClient<TKey, TMessage>(
         string? url,
         string fallbackEnvName = "KAFKA_URL",
@@ -97,7 +272,6 @@ internal static class KafkaHelper {
     extension(ISchemaRegistryClient client) {
         public async ValueTask<Result.WithValue<SchemaInfo>> GetSchema(string topic) {
             ArgumentException.ThrowIfNullOrEmpty(topic);
-
             var subject = $"{topic}-value";
             var metadata = await client.GetLatestSchemaAsync(subject);
             if (Avro.Schema.Parse(metadata.SchemaString) is not RecordSchema avroSchema) return KafkaError.NotFound;
@@ -128,7 +302,6 @@ internal static class KafkaHelper {
             ArgumentException.ThrowIfNullOrEmpty(jsonPayload);
             ArgumentException.ThrowIfNullOrEmpty(topic);
             ArgumentNullException.ThrowIfNull(message);
-
             var result = await client.GetSchema(topic);
             if (result is not Result.Success<SchemaInfo> { Value: var schemaInfo })
                 return result.Error;
@@ -180,7 +353,6 @@ internal static class KafkaHelper {
         public async Task TryPopulateValue(SchemaInfo schemaInfo, string jsonPayload,
             SerializationContext? context = null) {
             ArgumentException.ThrowIfNullOrEmpty(jsonPayload);
-
             var record = JsonToGenericRecord(jsonPayload, schemaInfo.Schema);
             var serializedPayload = await schemaInfo.Serializer.SerializeAsync(record,
                 context ?? new(MessageComponentType.Value, schemaInfo.Topic));
@@ -255,99 +427,23 @@ internal static class KafkaHelper {
                 }
             }
 
-            if (url.Extras.TryGetValue("ack", out var ackValue) &&
-                Enum.TryParse<Acks>(ackValue, true, out var acks))
-                config.Acks = acks;
-            config.Set("socket.connection.setup.timeout.ms", "");
+            foreach (var (key, value) in url.Extras) {
+                if (ConfigFactories.TryGetValue(key, out var globalConfigFactory))
+                    globalConfigFactory(value, config);
+            }
+
             return config;
         }
 
-        public AdminClientConfig ToAdminConfig() {
-            var result = url.ToConfig<AdminClientConfig>();
-            string[] validConfigs = [
-                "client.id",
-                "message.max.bytes",
-                "message.copy.max.bytes",
-                "receive.message.max.bytes",
-                "max.in.flight",
-                "topic.metadata.refresh.interval.ms",
-                "metadata.max.age.ms",
-                "topic.metadata.refresh.fast.interval.ms",
-                "topic.metadata.refresh.sparse",
-                "topic.metadata.propagation.max.ms",
-                "topic.blacklist",
-                "debug",
-                "socket.timeout.ms",
-                "socket.send.buffer.bytes",
-                "socket.receive.buffer.bytes",
-                "socket.keepalive.enable",
-                "socket.nagle.disable",
-                "socket.max.fails",
-                "broker.address.ttl",
-                "socket.connection.setup.timeout.ms",
-                "connections.max.idle.ms",
-                "reconnect.backoff.ms",
-                "reconnect.backoff.max.ms",
-                "statistics.interval.ms",
-                "log.queue",
-                "log.thread.name",
-                "enable.random.seed",
-                "log.connection.close",
-                "internal.termination.signal",
-                "api.version.request",
-                "api.version.request.timeout.ms",
-                "api.version.fallback.ms",
-                "broker.version.fallback",
-                "allow.auto.create.topics",
-                "ssl.cipher.suites",
-                "ssl.curves.list",
-                "ssl.sigalgs.list",
-                "ssl.key.location",
-                "ssl.key.password",
-                "ssl.key.pem",
-                "ssl.certificate.location",
-                "ssl.certificate.pem",
-                "ssl.ca.location",
-                "ssl.ca.pem",
-                "ssl.ca.certificate.stores",
-                "ssl.crl.location",
-                "ssl.keystore.location",
-                "ssl.keystore.password",
-                "ssl.providers",
-                "ssl.engine.location",
-                "ssl.engine.id",
-                "enable.ssl.certificate.verification",
-                "ssl.endpoint.identification.algorithm",
-                "sasl.kerberos.service.name",
-                "sasl.kerberos.principal",
-                "sasl.kerberos.kinit.cmd",
-                "sasl.kerberos.keytab",
-                "sasl.kerberos.min.time.before.relogin",
-                "sasl.oauthbearer.config",
-                "enable.sasl.oauthbearer.unsecure.jwt",
-                "sasl.oauthbearer.method",
-                "sasl.oauthbearer.client.id",
-                "sasl.oauthbearer.client.secret",
-                "sasl.oauthbearer.scope",
-                "sasl.oauthbearer.extensions",
-                "sasl.oauthbearer.token.endpoint.url",
-                "plugin.library.paths",
-                "client.rack",
-                "client.dns.lookup"
-            ];
-            var compareMode = StringComparer.OrdinalIgnoreCase;
-            foreach (var pair in url.Extras.Where(pair => validConfigs.Contains(pair.Key, compareMode)))
-                result.Set(pair.Key, pair.Value);
-
-            return result;
-        }
+        public AdminClientConfig ToAdminConfig() => url.ToConfig<AdminClientConfig>();
 
         public ProducerConfig ToProducerConfig() {
             var config = url.ToConfig<ProducerConfig>();
-            config.MessageTimeoutMs = url.Extras.TryGetValue("message.timeout.ms", out var timeoutValue) &&
-                                      int.TryParse(timeoutValue, out var timeoutMs)
-                ? timeoutMs
-                : 5_000;
+            foreach (var (key, value) in url.Extras) {
+                if (ProducerConfigFactories.TryGetValue(key, out var producerConfigFactory))
+                    producerConfigFactory(value, config);
+            }
+
             return config;
         }
 
