@@ -91,7 +91,7 @@ static async Task<IResult> ReceiveWebhook(HttpContext context, string identifier
     if (string.IsNullOrWhiteSpace(identifier))
         return await SaveAndReturn(WebhookResponse.BadRequest("Identifier is required"));
 
-    logger.WebhookReceived(body?.RootElement.GetRawText());
+    logger.WebhookReceived(body.RootElement.GetRawText());
     if (!string.IsNullOrWhiteSpace(config.SignatureHeader) &&
         (!headers.TryGetValue(config.SignatureHeader, out var header) || string.IsNullOrWhiteSpace(header))) {
         logger.SignatureHeaderNotFound(identifier);
@@ -172,11 +172,10 @@ internal static class Helper {
         if (json is not { RootElement: var root }) return true;
 
         return root.ValueKind switch {
-            JsonValueKind.Undefined => true,
+            JsonValueKind.Undefined or JsonValueKind.Null => true,
             JsonValueKind.Object => root.GetPropertyCount() == 0,
             JsonValueKind.Array => root.GetArrayLength() == 0,
             JsonValueKind.String => string.IsNullOrWhiteSpace(root.GetString()),
-            JsonValueKind.Null or JsonValueKind.Undefined => true,
             _ => false
         };
     }
@@ -184,9 +183,8 @@ internal static class Helper {
     public static IPAddress? GetClientIp(this HttpContext http) {
         if (http.Request.Headers.TryGetValue("X-Forwarded-For", out var headers) &&
             headers.FirstOrDefault() is { } header && !string.IsNullOrWhiteSpace(header) &&
-            IPAddress.TryParse(header, out var ip)) {
+            IPAddress.TryParse(header, out var ip))
             return ip;
-        }
 
         return http.Connection.RemoteIpAddress;
     }

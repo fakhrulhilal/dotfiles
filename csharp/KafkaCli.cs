@@ -117,12 +117,10 @@ sealed class Commands {
         if (schemaResult is not Result.Success<SchemaInfo> { Value: var schema }) {
             switch (schemaResult.Error) {
                 case { Code: Codes.NotFound }:
-
                     Console.WriteLineInterpolated(
                         $"{CC.Red}❌ Error{CC.Default}: Could not find valid schema for topic: '{topic}'");
                     break;
                 case { Code: Codes.Unknown, Message: var errorDetail } when !string.IsNullOrEmpty(errorDetail):
-
                     Console.WriteLineInterpolated(
                         $"{CC.Red}❌ Error{CC.Default}: Unknown error during getting schema for topic: '{topic}': {CC.Red}{errorDetail}{CC.Default}");
                     break;
@@ -163,14 +161,12 @@ sealed class Commands {
                 var results = await Task.WhenAll(producingTasks);
                 foreach (var result in results)
                     table.AddRow(result.Partition.ToString(), result.Offset.ToString(), result.Payload);
-
                 ctx.Refresh();
                 await Task.Delay(200);
                 producingTasks.Clear();
                 pageNumber++;
             }
         });
-
         Console.WriteLine("✅ Message produced successfully");
         return 0;
 
@@ -214,7 +210,6 @@ sealed class Commands {
             $"{CC.White}⚡{CC.Default} Default partition per topic: {CC.Cyan}{partition}{CC.Default}");
         Console.WriteLineInterpolated(
             $"{CC.White}⚡{CC.Default} Default replication factor: {CC.Cyan}{replication}{CC.Default}");
-
         var configFile = await File.ReadAllBytesAsync(configPath!, cancellationToken);
         var topicSpecifications = JsonSerializer.Deserialize(configFile, JsonOpt.Default.SchemaConfigArray) ?? [];
         if (topicSpecifications.Length == 0) {
@@ -243,19 +238,16 @@ sealed class Commands {
                 $"{CC.White}㉿{CC.Default} Found topic config: {CC.Cyan}{spec.Topic}{CC.Default} with schema {CC.Cyan}{spec.ValueSchema}{CC.Default}");
             switch (await adminClient.RegisterTopicAsync(spec.Topic, totalPartition, totalReplication)) {
                 case { Successful: true }:
-
                     createdTopicCount++;
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Topic created (partitions: {totalPartition}, replication: {totalReplication})");
                     break;
                 case { Successful: false, Error.Code: Codes.AlreadyExists }:
-
                     Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
                     skippedTopics.Add(spec.Topic);
                     break;
                 case { Successful: false, Error.Code: Codes.Unknown, Error.Message: var errorDetail }
                     when !string.IsNullOrEmpty(errorDetail):
-
                     Console.WriteLineInterpolated(
                         $"    {CC.Red}✗{CC.Default} Failed to create topic: {spec.Topic}, {CC.Red}{errorDetail}{CC.Default}");
                     failedTopics.Add(spec.Topic);
@@ -266,19 +258,16 @@ sealed class Commands {
             switch (await schemaRegistryClient.RegisterSchemaAsync(spec.Topic, spec.ValueSchema, schemaDir!,
                         cancellationToken)) {
                 case Result.Success<string> { Value: var schemaId }:
-
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     registeredSchemaCount++;
                     break;
                 case { Successful: false, Error.Code: Codes.NotFound }:
-
                     var schemaPath = Path.Combine(schemaDir!, spec.ValueSchema);
                     Console.WriteLineInterpolated(
                         $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
                     break;
                 case { Successful: false }:
-
                     Console.WriteLineInterpolated(
                         $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}");
                     failedRegisterSchemas.Add(spec.Topic);
@@ -289,18 +278,21 @@ sealed class Commands {
         Console.WriteLine("📊 Initialization Summary:");
         Console.WriteLineInterpolated(
             $"{CC.Green}✓{CC.Default} Topics created: {createdTopicCount}/{topicSpecifications.Length}");
-        if (skippedTopics.Count > 0)
+        if (skippedTopics.Count > 0) {
             Console.WriteLineInterpolated(
                 $"{CC.Yellow}⚠{CC.Default} Topics skipped (already exist): {string.Join(", ", skippedTopics)}");
+        }
+
         if (failedTopics.Count > 0)
             Console.WriteLineInterpolated($"{CC.Red}✗{CC.Default} Topics failed: {string.Join(", ", failedTopics)}");
         Console.WriteLineInterpolated(
             $"{CC.Green}✓{CC.Default} Schemas registered: {registeredSchemaCount}/{topicSpecifications.Length}");
-        if (failedRegisterSchemas.Count > 0)
+        if (failedRegisterSchemas.Count > 0) {
             Console.WriteLineInterpolated(
                 $"{CC.Red}✗{CC.Default} Schemas failed to register: {string.Join(", ", failedRegisterSchemas)}");
-        Console.WriteLine("🎉 Kafka initialization completed successfully!");
+        }
 
+        Console.WriteLine("🎉 Kafka initialization completed successfully!");
         return 0;
 
         string? Validate() {
@@ -334,12 +326,9 @@ file static class Helper {
     public static void WriteToConsole(IProducer<string?, byte[]> _, Error error) =>
         Console.WriteLineInterpolated($"{CC.Red}Error{CC.Default}: {error.Reason}");
 
-    public static void Silence(IProducer<string?, byte[]> _, Error error) {
-    }
+    public static void Silence(IProducer<string?, byte[]> _, Error error) { }
 
-    public static void Silence(IAdminClient _, LogMessage log) {
-    }
+    public static void Silence(IAdminClient _, LogMessage log) { }
 
-    public static void Silence(IAdminClient _, Error error) {
-    }
+    public static void Silence(IAdminClient _, Error error) { }
 }
