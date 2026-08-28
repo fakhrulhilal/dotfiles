@@ -1,0 +1,38 @@
+# Visual Studio / IDE specific files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# .NET Build outputs & caches
+[Bb]in/
+[Oo]bj/
+[Rr]estore/
+ipch/
+**/artifacts
+
+# Test results & Coverage
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Publish directories
+[Pp]ublish/
+*.[Pp]ublish.xml
+
+# Git / Version Control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation & Markdown
+*.md
+LICENSE
+README.md
+
+# OS specific files
+.DS_Store
+Thumbs.db
