@@ -1,0 +1,20 @@
+name: local
+variables:
+  - name: baseUrl
+    value: http://localhost:8080
+    description: ""
+  - name: log_format_json
+    value: json
+    description: ""
+  - name: log_format_netcat
+    value: netcat
+    description: ""
+  - name: log_format_fetch
+    value: fetch
+    description: ""
+  - name: log_format_curl
+    value: curl
+    description: ""
+  - name: identifier
+    value: github
+    description: ""

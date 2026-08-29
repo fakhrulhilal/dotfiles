@@ -17,6 +17,8 @@ namespace Dotfiles.Helpers;
 delegate void ConfigFactory(string value, ConnectionBuilder config);
 
 public static class PostgreHelper {
+    private const StringComparison CmpMode = StringComparison.InvariantCultureIgnoreCase;
+
     private readonly struct Defaults {
         public const string Host = "localhost";
         public const int Port = 5432;
@@ -105,14 +107,25 @@ public static class PostgreHelper {
         }
     };
 
-    private static string WrapSqlQuery(string rawSql) =>
+    private static string WrapSqlQuery(string rawSql) {
+        var trimmed = rawSql.Trim().TrimEnd(';');
+        var isDml = trimmed.StartsWith("insert", CmpMode) || trimmed.StartsWith("update", CmpMode) ||
+                    trimmed.StartsWith("delete", CmpMode);
         // language=PostgreSQL
-        $"""
-         SELECT row_to_json(__q__) 
-         FROM (
-             {rawSql}
-         ) __q__
-         """;
+        return isDml
+            ? $""""
+               WITH __q__ AS (
+                   {trimmed}
+               )
+               SELECT row_to_json(__q__) FROM __q__
+               """"
+            : $"""
+               SELECT row_to_json(__q__) 
+               FROM (
+                   {rawSql}
+               ) __q__
+               """;
+    }
 
     public static NpgsqlConnection? BuildPostgreClient(string? url, string fallbackEnvName = "DATABASE_URL") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
@@ -181,6 +194,9 @@ public static class PostgreHelper {
             foreach (var parameter in parameters) {
                 var parameterName = parameter.Name.TrimStart('@');
                 switch (parameter) {
+                    case DbParameter.Null:
+                        command.Parameters.AddWithValue(parameterName, DBNull.Value);
+                        break;
                     case DbParameter.Bit bit:
                         command.Parameters.AddWithValue(parameterName, NpgsqlDbType.Boolean, bit.Value);
                         break;

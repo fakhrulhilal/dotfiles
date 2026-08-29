@@ -1,0 +1,24 @@
+info:
+  name: Format log
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/webhook/:identifier/:log_id/:format"
+  params:
+    - name: identifier
+      value: "{{identifier}}"
+      type: path
+    - name: log_id
+      type: path
+    - name: format
+      value: "{{log_format_json}}"
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

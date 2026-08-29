@@ -105,6 +105,9 @@ public static partial class SqliteHelper {
             foreach (var parameter in parameters) {
                 var parameterName = parameter.Name.TrimStart('@');
                 switch (parameter) {
+                    case DbParameter.Null:
+                        command.Parameters.AddWithValue(parameterName, DBNull.Value);
+                        break;
                     case DbParameter.Bit bit:
                         command.Parameters.AddWithValue(parameterName, bit.Value);
                         break;

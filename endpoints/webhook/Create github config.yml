@@ -1,0 +1,31 @@
+info:
+  name: Create github config
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/config"
+  body:
+    type: json
+    data: |-
+      {
+        "identifier": "githubpersonal",
+        "signature": {
+          "encoding": "hex",
+          "algorithm": "sha256",
+          "header": "X-Hub-Signature-256",
+          "template": "sha256=hash({body})"
+        },
+        "secret": {
+          "encoding": "plain",
+          "value": ""
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

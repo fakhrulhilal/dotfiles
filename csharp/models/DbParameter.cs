@@ -26,8 +26,12 @@ public abstract class DbParameter {
     public static Bit Create(string name, bool value) => new() { Name = name, Value = value };
     public static Number Create(string name, int value) => new() { Name = name, Value = value };
     public static Ip Create(string name, IPAddress value) => new() { Name = name, Value = value };
+    public static FullTime Create(string name, DateTime value) => new() { Name = name, Value = value };
+    public static Null Blank(string name) => new() { Name = name };
 
     public required string Name { get; init; }
+
+    public sealed class Null : DbParameter;
 
     public sealed class Text : DbParameter {
         public required string Value { get; init; }

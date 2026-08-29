@@ -18,3 +18,17 @@ public sealed class IpAddressJsonConverter : JsonConverter<IPAddress> {
     public override void Write(Utf8JsonWriter writer, IPAddress value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.ToString());
 }
+
+public sealed class RawJsonConverter : JsonConverter<string> {
+    public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+        if (reader.TokenType == JsonTokenType.String) {
+            return reader.GetString() ?? string.Empty;
+        }
+
+        throw new JsonException(
+            $"The JSON value '{reader.GetString()}' could not be converted to System.Net.IPAddress.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+        writer.WriteRawValue(value);
+}
