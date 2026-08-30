@@ -34,6 +34,10 @@ services:
       App__IconPath: "/var/app/common/webhook.ico"
       Db__Type: Sqlite
       DB__ConnectionString: "Data Source=/var/app/data/webhook.db;"
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__System: "Error"
+      Logging__LogLevel__Microsoft: "Error"
+      Logging__LogLevel__Microsoft.Hosting.Lifetime: "Information"
 
 volumes:
   common_data:

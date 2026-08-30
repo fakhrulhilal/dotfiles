@@ -1,0 +1,32 @@
+info:
+  name: Create jira config
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{baseUrl}}/config"
+  body:
+    type: json
+    data: |-
+      {
+        "identifier": "jirapersonal",
+        "validate": true,
+        "signature": {
+          "encoding": "hex",
+          "algorithm": "sha256",
+          "header": "X-Hub-Signature",
+          "template": "sha256=hash({body})"
+        },
+        "secret": {
+          "encoding": "plain",
+          "value": "{{$randomPassword}}"
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

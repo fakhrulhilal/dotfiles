@@ -170,8 +170,8 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
     if (actualSignature.Algorithm.HasValue)
         signatureConfig.Algorithm = actualSignature.Algorithm.Value;
     var expectedSignature = await signatureProvider.ComputeAsync(signatureConfig, config.Secret, context.Request);
-    if (expectedSignature != actualSignature.Value) {
-        logger.SignatureMissmatch(identifier, expectedSignature, actualSignature.Value);
+    if (expectedSignature != actualSignature) {
+        logger.SignatureMissmatch(identifier, expectedSignature.Value, actualSignature.Value);
         return await SaveAndReturn(WebhookResponse.Reject("Signature missmatch"));
     }
 
@@ -419,7 +419,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
 internal interface ISignatureProvider {
     SignatureHash? GetReceived(string headerName, IHeaderDictionary headers);
 
-    Task<string> ComputeAsync(SignatureConfig signature, SecretConfig secret, HttpRequest httpRequest,
+    Task<SignatureHash> ComputeAsync(SignatureConfig signature, SecretConfig secret, HttpRequest httpRequest,
         string? rawBody = null);
 }
 
@@ -433,17 +433,20 @@ internal sealed partial class WebhookSignatureProvider : ISignatureProvider {
             ? null
             : SignatureHash.Parse(signatureHeader);
 
-    public async Task<string> ComputeAsync(SignatureConfig signature, SecretConfig secret, HttpRequest httpRequest,
+    public async Task<SignatureHash> ComputeAsync(SignatureConfig signature, SecretConfig secret,
+        HttpRequest httpRequest,
         string? rawBody = null) {
         var template = signature.Template;
         rawBody ??= await httpRequest.GetRawBody() ?? string.Empty;
         if (HashFunctionRegex.Match(template) is { Success: true } toHash) {
             var builder = new StringBuilder();
-            builder.Append(template[..(toHash.Index - 1)]);
-            var contentToCalculate = CompileTemplate(httpRequest.Headers, toHash.Value, rawBody);
+            builder.Append(template[..(toHash.Index + 1)]);
+            var contentToCalculate = CompileTemplate(httpRequest.Headers, toHash.Groups["content"].Value, rawBody);
             var hash = CalculateHash(contentToCalculate);
             builder.Append(hash);
-            builder.Append(toHash.Index + toHash.Length);
+            var endIndex = toHash.Index + toHash.Length;
+            if (template.Length > endIndex)
+                builder.Append(template[endIndex..]);
             template = builder.ToString();
         }
 
@@ -456,7 +459,7 @@ internal sealed partial class WebhookSignatureProvider : ISignatureProvider {
             };
         });
         var message = CompileTemplate(httpRequest.Headers, template, rawBody);
-        return message;
+        return SignatureHash.Parse(message);
 
         string CalculateHash(string content) {
             var key = secret.Encoding == SecretEncoding.Base64
@@ -500,7 +503,7 @@ internal sealed partial class WebhookSignatureProvider : ISignatureProvider {
         RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex VariablePattern();
 
-    [GeneratedRegex(@"(\W|^)hash\((?<content>[^\)]+)\)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?:\W|^)hash\((?<content>[^\)]+)\)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex HashFunctionPattern();
 }
 
