@@ -56,6 +56,19 @@ builder.Services.AddScoped<IDbConnection>(provider => {
         _ => throw new InvalidOperationException($"Unsupported DB type: {config.Type}")
     };
 });
+builder.Services.AddCors(opt => {
+    var allowedOrigins = builder.Configuration.GetValue<string>("App:AllowedOrigins") ?? "*";
+    opt.AddDefaultPolicy(x => {
+        x.AllowAnyHeader().AllowAnyMethod();
+        if (allowedOrigins == "*")
+            x.AllowAnyOrigin();
+        else {
+            x.AllowCredentials();
+            x.WithOrigins(allowedOrigins.Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+    });
+});
 builder.Services.AddValidation();
 builder.Services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
 builder.Services.AddSingleton<ISignatureProvider, WebhookSignatureProvider>();
@@ -72,17 +85,21 @@ builder.Services.AddHealthChecks()
     .AddCheck("web", () => HealthCheckResult.Healthy(), ["self"])
     .AddCheck<DbHealthCheck>("db", HealthStatus.Unhealthy, ["dependency"]);
 var app = builder.Build();
+app.UseCors();
 app.MapHealthChecks("/_health", new() { Predicate = check => check.Tags.Contains("self") }).ShortCircuit();
 app.MapHealthChecks("/_health/ready", new() { Predicate = check => check.Tags.Contains("dependency") }).ShortCircuit();
-app.MapGet("/favicon.ico", ([FromServices] IOptions<AppConfig> config) => config.Value.IconUrl is not null
-    ? Results.Redirect(config.Value.IconUrl, true)
-    : Results.NotFound());
+app.MapGet("/favicon.ico", ([FromServices] IOptions<AppConfig> config) => config.Value switch {
+    { IconUrl: var url } when !string.IsNullOrEmpty(url) => Results.Redirect(url, true),
+    { IconPath: var path } when !string.IsNullOrEmpty(path) && File.Exists(path) =>
+        Results.File(path, "image/x-icon", "favicon.ico"),
+    _ => Results.NotFound()
+});
 app.Map("/", () => "POST /webhook/{identifier}");
-app.MapGet("/webhook/{identifier:alpha}/{id:int}/{format:alpha=json}", FormatWebhookLog);
-app.MapGet("/webhook/{identifier:alpha}", GetWebhookLog);
-app.MapPost("/webhook/{identifier:alpha}", ReceiveWebhook);
+app.MapGet("/webhook/{identifier}/{id:int}/{format:alpha=json}", FormatWebhookLog);
+app.MapGet("/webhook/{identifier}", GetWebhookLog);
+app.MapPost("/webhook/{identifier}", ReceiveWebhook);
 app.MapPost("/config", CreateWebhookConfig);
-app.MapGet("/config/{identifier:alpha}", GetWebhookConfig).WithName("GetConfigDetails");
+app.MapGet("/config/{identifier}", GetWebhookConfig).WithName("GetConfigDetails");
 try {
     await app.RunAsync();
 }
@@ -197,6 +214,12 @@ internal static class Const {
 
 internal sealed class AppConfig {
     public string? IconUrl { get; set; }
+    public string? IconPath { get; set; }
+
+    /// <summary>
+    /// Comma separated domain or '*' (default) to allow all
+    /// </summary>
+    public string? AllowedOrigins { get; set; }
 }
 
 [EnumExtensions]
@@ -267,7 +290,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
                 signature JSONB NOT NULL,
                 secret JSONB NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                modifiet_at TIMESTAMPTZ NULL
+                modified_at TIMESTAMPTZ NULL
             );
             COMMENT ON TABLE configs IS 'Webhook registration configuration';
             COMMENT ON COLUMN configs.identifier IS 'Webhook identifier which is available for use in webhook URLs';
@@ -302,7 +325,7 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
                 signature TEXT NOT NULL,
                 secret TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                modifiet_at TEXT NULL
+                modified_at TEXT NULL
             );
             """, transaction: transaction);
         await transaction.CommitAsync();
@@ -465,7 +488,7 @@ internal static class Helper {
                     RETURNING id;
                     """, DbOpts.Default.CreatedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
                 SqliteConnection sqlite => await sqlite.QueryAsync(
-                    // language=PostgreSQL
+                    // language=SQLite
                     """
                     INSERT INTO configs(identifier, signature, secret, created_at)
                     VALUES(@identifier, @signature, @secret, @createdAt)
@@ -804,13 +827,15 @@ internal sealed record SecretConfig(
     [property: Required] string Value);
 
 internal sealed record CreateConfigDto(
-    [property: Required, StringLength(25, MinimumLength = 2)]
+    [property: Required, StringLength(25, MinimumLength = 2),
+               RegularExpression("^[0-9a-zA-Z_]+$",
+                   ErrorMessage = "Only allows alphanumeric characters and underscores")]
     string Identifier,
     SignatureConfig? Signature,
     [property: Required] SecretConfig Secret
 );
 
-internal sealed record GetWebhookConfigDto(string Identifier, SignatureConfig? Signature, DateTime LastModifietAt);
+internal sealed record GetWebhookConfigDto(string Identifier, SignatureConfig? Signature, DateTime LastModifiedAt);
 
 /// <summary>
 /// Calculated signature hash.
