@@ -5,8 +5,8 @@
 
 using System.Data;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Dotfiles.Models;
 using Microsoft.Data.Sqlite;
@@ -82,6 +82,7 @@ public static class SqliteHelper {
                 memoryStream.SetLength(0);
                 WriteJson(memoryStream, reader);
                 ReadOnlySpan<byte> utf8Json = memoryStream.GetBuffer().AsSpan(0, (int)memoryStream.Length);
+                Console.WriteLine(Encoding.UTF8.GetString(utf8Json));
                 var item = JsonSerializer.Deserialize(utf8Json, jsonTypeInfo);
                 if (item is not null) yield return item;
             }
@@ -118,12 +119,8 @@ public static class SqliteHelper {
                             case TimeOnly timeOnly: writer.WriteStringValue(timeOnly.ToString("O")); break;
                             case string text:
                                 var isJsonText = text.Length > 0 && (text[0] == '{' || text[0] == '[');
-                                if (targetType == typeof(string))
-                                    writer.WriteStringValue(text);
-                                else if (targetType.IsClass && isJsonText)
+                                if (isJsonText && targetType != typeof(string))
                                     writer.WriteRawValue(text);
-                                else if (targetType.IsEnum && propInfo.CustomConverter is JsonStringEnumConverter)
-                                    writer.WriteStringValue(text);
                                 else if (targetType.IsEnum && int.TryParse(text, out var enumNumber))
                                     writer.WriteNumberValue(enumNumber);
                                 else if (targetType == typeof(DateTime)) {
@@ -136,6 +133,8 @@ public static class SqliteHelper {
                                         ? dto.ToString("O")
                                         : text);
                                 }
+                                else
+                                    writer.WriteStringValue(text);
 
                                 break;
                         }
