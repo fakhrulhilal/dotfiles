@@ -23,6 +23,7 @@ My personal shell experience
    2. .NET apps: aspire CLI, C# REPL, EF core CLI, Test reporting generator
    3. AI: opencode, copilot, gemini, claude
    4. Neovim
+   5. Ngrok: for tunneling 
 10. CLI apps (through [mise](config/mise.toml))
     1. lsd (alternative for `ls`)
     2. ripgrep (alternative for `grep`)

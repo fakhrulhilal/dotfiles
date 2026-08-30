@@ -1,3 +1,6 @@
+[vars]
+ngrok_channel_id = "bNyj1mQVY4c"
+
 [tools]
 usage = "latest"
 
@@ -91,6 +94,10 @@ age = "latest" # encryption tool
 "github:maif/yozefu" = "latest" # Kafka client
 redis = "8.6.2"
 "github:duckdb/duckdb" = "latest"
+"http:ngrok" = {
+    version = "3",
+    url = 'https://bin.ngrok.com/c/{{ vars.ngrok_channel_id }}/ngrok-v{{ version }}-stable-{{ os(macos="darwin") }}-{{ arch(x64="amd64", x32="386") }}.{{ os(macos="zip", windows="zip", linux="tgz") }}'
+}
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
@@ -98,6 +105,7 @@ redis = "8.6.2"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
 
 [settings]
+
 experimental = true
 
 [settings.cargo]
