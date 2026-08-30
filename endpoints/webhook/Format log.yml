@@ -11,6 +11,7 @@ http:
       value: "{{identifier}}"
       type: path
     - name: log_id
+      value: ""
       type: path
     - name: format
       value: "{{log_format_json}}"

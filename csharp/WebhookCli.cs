@@ -148,9 +148,16 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
     if (string.IsNullOrWhiteSpace(identifier))
         return await SaveAndReturn(WebhookResponse.BadRequest("Identifier is required"));
 
+    if (string.IsNullOrWhiteSpace(body)) {
+        logger.NoPayload(identifier);
+        return await SaveAndReturn(WebhookResponse.BadRequest("Empty payload"));
+    }
+
     logger.WebhookReceived(identifier, body);
-    if (await db.GetConfig(identifier) is not { } config)
-        return await SaveAndReturn(WebhookResponse.NotFound("Unregistered webhook"));
+    if (await db.GetConfig(identifier) is not { Validate: true } config)
+        return await SaveAndReturn(new WebhookResponse { Code = (int)HttpStatusCode.OK });
+    if (config.Secret is null)
+        return await SaveAndReturn(WebhookResponse.BadRequest("Webhook misconfigured"));
 
     var signatureConfig = config.Signature ??= SignatureConfig.WebSub;
     if (signatureProvider.GetReceived(signatureConfig.Header, context.Request.Headers)
@@ -159,15 +166,9 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
         return await SaveAndReturn(WebhookResponse.BadRequest("Missing signature header"));
     }
 
-    var validatorConfig = actualSignature.Algorithm.HasValue
-        ? signatureConfig with { Algorithm = actualSignature.Algorithm.Value }
-        : signatureConfig;
-    if (string.IsNullOrWhiteSpace(body)) {
-        logger.NoPayload(identifier);
-        return await SaveAndReturn(WebhookResponse.BadRequest("Empty payload"));
-    }
-
-    var expectedSignature = await signatureProvider.ComputeAsync(validatorConfig, config.Secret, context.Request);
+    if (actualSignature.Algorithm.HasValue)
+        signatureConfig.Algorithm = actualSignature.Algorithm.Value;
+    var expectedSignature = await signatureProvider.ComputeAsync(signatureConfig, config.Secret, context.Request);
     if (expectedSignature != actualSignature.Value) {
         logger.SignatureMissmatch(identifier, expectedSignature, actualSignature.Value);
         return await SaveAndReturn(WebhookResponse.Reject("Signature missmatch"));
@@ -185,9 +186,12 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
 static async ValueTask<IResult> CreateWebhookConfig(CreateConfigDto dto, IDbConnection db, TimeProvider clock) {
     if (await db.GetConfig(dto.Identifier) is not null)
         return Invalid(nameof(dto.Identifier), $"Webhook {dto.Identifier} is not available");
+    if (dto.Validate && string.IsNullOrWhiteSpace(dto.Secret.Value))
+        return Invalid(nameof(dto.Secret), "Secret is required when enabling validation");
 
     var createdId = await db.CreateConfig(new WebhookConfig {
         Identifier = dto.Identifier,
+        Validate = dto.Validate,
         Signature = dto.Signature,
         Secret = dto.Secret,
         CreatedAt = clock.GetUtcNow().UtcDateTime
@@ -201,8 +205,7 @@ static async ValueTask<IResult> CreateWebhookConfig(CreateConfigDto dto, IDbConn
 static async ValueTask<IResult> GetWebhookConfig(string identifier, IDbConnection db) {
     var config = await db.GetConfig(identifier);
     return config is not null
-        ? Results.Ok(
-            new GetWebhookConfigDto(config.Identifier, config.Signature, config.ModifiedAt ?? config.CreatedAt))
+        ? Results.Ok(new GetWebhookConfigDto(config))
         : Results.NotFound();
 }
 
@@ -297,6 +300,31 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
             COMMENT ON COLUMN configs.signature IS 'Signature configuration with the following properties: algorithm, template, header, encoding';
             COMMENT ON COLUMN configs.secret IS 'Secret configuration with the following properties: value, encoding';
             """, transaction: transaction);
+        await db.ExecuteAsync(
+            // language=PostgreSQL
+            """
+            DO $$ 
+            BEGIN 
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'configs' AND column_name = 'signature'
+                ) THEN
+                    ALTER TABLE configs ALTER COLUMN signature DROP NOT NULL;
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'configs' AND column_name = 'secret'
+                ) THEN
+                    ALTER TABLE configs ALTER COLUMN secret DROP NOT NULL;
+                END IF;
+
+                ALTER TABLE configs 
+                    ADD COLUMN IF NOT EXISTS validate BOOLEAN NOT NULL DEFAULT TRUE;
+            END $$;
+            """, transaction: transaction);
         await transaction.CommitAsync();
     }
 
@@ -328,6 +356,37 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
                 modified_at TEXT NULL
             );
             """, transaction: transaction);
+        await db.ExecuteAsync(
+            // language=SQLite
+            """
+            PRAGMA foreign_keys=off;
+
+            -- Re-create the new table with the exact same structure, 
+            -- BUT omit the 'NOT NULL' for signature and secret.
+            -- (Make sure to include all your other existing columns here exactly as they are)
+            CREATE TABLE config_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT NOT NULL,
+                signature TEXT,
+                secret TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                modified_at TEXT NULL
+            );
+
+            -- Copy all data from the old table to the new table
+            INSERT INTO config_new (id, identifier, signature, secret)
+            SELECT id, identifier, signature, secret FROM configs;
+
+            DROP TABLE configs;
+            ALTER TABLE config_new RENAME TO configs;
+            PRAGMA foreign_keys=on;
+            """, transaction: transaction);
+        if (!await db.DoesColumnExistsAsync("configs", "validate", transaction))
+            await db.ExecuteAsync(
+                // language=SQLite
+                """
+                ALTER TABLE configs ADD COLUMN validate INTEGER NOT NULL DEFAULT 1
+                """, transaction: transaction);
         await transaction.CommitAsync();
     }
 }
@@ -476,22 +535,25 @@ internal static class Helper {
                 config.Signature is not null
                     ? DbParameter.Create("signature", config.Signature, DbOpts.Default.SignatureConfig)
                     : DbParameter.Blank("signature"),
-                DbParameter.Create("secret", config.Secret, DbOpts.Default.SecretConfig),
+                config.Secret is not null
+                    ? DbParameter.Create("secret", config.Secret, DbOpts.Default.SecretConfig)
+                    : DbParameter.Blank("secret"),
+                DbParameter.Create("validate", config.Validate),
                 DbParameter.Create("createdAt", config.CreatedAt)
             ];
             return db switch {
                 NpgsqlConnection postre => await postre.QueryAsync(
                     // language=PostgreSQL
                     """
-                    INSERT INTO configs(identifier, signature, secret, created_at)
-                    VALUES(@identifier, @signature, @secret, @createdAt)
+                    INSERT INTO configs(identifier, validate, signature, secret, created_at)
+                    VALUES(@identifier, @validate, @signature, @secret, @createdAt)
                     RETURNING id;
-                    """, DbOpts.Default.CreatedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
+                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
                 SqliteConnection sqlite => await sqlite.QueryAsync(
                     // language=SQLite
                     """
-                    INSERT INTO configs(identifier, signature, secret, created_at)
-                    VALUES(@identifier, @signature, @secret, @createdAt)
+                    INSERT INTO configs(identifier, validate, signature, secret, created_at)
+                    VALUES(@identifier, @validate, @signature, @secret, @createdAt)
                     RETURNING id;
                     """, DbOpts.Default.CreatedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
                 _ => 0
@@ -780,8 +842,9 @@ internal sealed record CreatedId(int Id) {
 internal sealed class WebhookConfig {
     public int Id { get; set; }
     public string Identifier { get; set; } = string.Empty;
+    public bool Validate { get; set; }
     public SignatureConfig? Signature { get; set; }
-    public SecretConfig Secret { get; set; } = null!;
+    public SecretConfig? Secret { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ModifiedAt { get; set; }
 }
@@ -831,6 +894,7 @@ internal sealed record CreateConfigDto(
                RegularExpression("^[0-9a-zA-Z_]+$",
                    ErrorMessage = "Only allows alphanumeric characters and underscores")]
     string Identifier,
+    bool Validate,
     SignatureConfig? Signature,
     [property: Required] SecretConfig Secret
 );
@@ -888,7 +952,8 @@ internal static partial class LoggerExtensions {
     [LoggerMessage(LogLevel.Information, "No signature header found for identifier {Identifier}")]
     public static partial void SignatureHeaderNotFound(this ILogger logger, string identifier);
 
-    [LoggerMessage(LogLevel.Information, "Signature missmatch for {Identifier}, expecting {Expected} but got {Actual}")]
+    [LoggerMessage(LogLevel.Information,
+        "Signature missmatch for {Identifier}, expecting {Expected} but got {Actual}")]
     public static partial void SignatureMissmatch(this ILogger logger, string identifier, string expected,
         string actual);
 

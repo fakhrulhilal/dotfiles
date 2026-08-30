@@ -97,9 +97,19 @@ public static class SqliteHelper {
                     writer.WritePropertyName(columnName);
                     if (row.IsDBNull(ordinal)) writer.WriteNullValue();
                     else {
+                        if (!propertyMap.TryGetValue(columnName, out var propInfo)) continue;
+
+                        var targetType = Nullable.GetUnderlyingType(propInfo.PropertyType) ??
+                                         propInfo.PropertyType;
                         switch (row.GetValue(ordinal)) {
+                            case short number: writer.WriteNumberValue(number); break;
                             case int number: writer.WriteNumberValue(number); break;
-                            case long number: writer.WriteNumberValue(number); break;
+                            case long number:
+                                if (targetType == typeof(bool))
+                                    writer.WriteBooleanValue(number > 0);
+                                else
+                                    writer.WriteNumberValue(number);
+                                break;
                             case double number: writer.WriteNumberValue(number); break;
                             case float number: writer.WriteNumberValue(number); break;
                             case decimal number: writer.WriteNumberValue(number); break;
@@ -109,10 +119,6 @@ public static class SqliteHelper {
                             case TimeOnly timeOnly: writer.WriteStringValue(timeOnly.ToString("O")); break;
                             case string text:
                                 var isJsonText = text.Length > 0 && (text[0] == '{' || text[0] == '[');
-                                if (!propertyMap.TryGetValue(columnName, out var propInfo)) continue;
-
-                                var targetType = Nullable.GetUnderlyingType(propInfo.PropertyType) ??
-                                                 propInfo.PropertyType;
                                 if (targetType == typeof(string))
                                     writer.WriteStringValue(text);
                                 else if (targetType.IsClass && isJsonText)
@@ -141,6 +147,26 @@ public static class SqliteHelper {
             }
         }
 
+        public async Task<bool> DoesColumnExistsAsync(string table, string column, IDbTransaction? transaction = null) {
+            ArgumentException.ThrowIfNullOrWhiteSpace(table);
+            ArgumentException.ThrowIfNullOrWhiteSpace(column);
+            await db.EnsureOpenAsync();
+            await using var command = db.CreateCommand();
+            command.Transaction = transaction switch {
+                null => null,
+                SqliteTransaction sqliteTransaction => sqliteTransaction,
+                _ => throw new InvalidOperationException("Only accept transaction with same DB")
+            };
+            command.CommandText = $"PRAGMA table_info({table})";
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) {
+                if (column.Equals(reader.GetString(1), StringComparison.InvariantCultureIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
         private void PopulateParameters(SqliteCommand command, IReadOnlyList<DbParameter> parameters) {
             foreach (var parameter in parameters) {
                 var parameterName = parameter.Name.TrimStart('@');
@@ -152,10 +178,10 @@ public static class SqliteHelper {
                         command.Parameters.AddWithValue(parameterName, bit.Value);
                         break;
                     case DbParameter.Date date:
-                        command.Parameters.AddWithValue(parameterName, date.Value);
+                        command.Parameters.AddWithValue(parameterName, date.Value.ToString("O"));
                         break;
                     case DbParameter.FullTime fullTime:
-                        command.Parameters.AddWithValue(parameterName, fullTime.Value);
+                        command.Parameters.AddWithValue(parameterName, fullTime.Value.ToString("O"));
                         break;
                     case DbParameter.Ip ip:
                         command.Parameters.AddWithValue(parameterName, ip.Value.ToString());
@@ -174,7 +200,7 @@ public static class SqliteHelper {
                         command.Parameters.AddWithValue(parameterName, text.Value);
                         break;
                     case DbParameter.Time time:
-                        command.Parameters.AddWithValue(parameterName, time.Value);
+                        command.Parameters.AddWithValue(parameterName, time.Value.ToString("O"));
                         break;
                 }
             }
