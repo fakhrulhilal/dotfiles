@@ -13,6 +13,7 @@ project.lock.json
 *.nuget.props
 node_modules/
 jspm_modules/
+*.db
 
 # dotnet cli install/uninstall scripts
 dotnet-install.ps1

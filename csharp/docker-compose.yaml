@@ -1,0 +1,40 @@
+name: dotfiles
+
+services:
+  webhook:
+    image: iroel/webhook:alpine
+    container_name: webhook
+    build:
+      dockerfile: alpine.Dockerfile
+      args:
+        SCRIPT_FILE: WebhookCli.cs
+      labels:
+        org.opencontainers.image.title: "Webhook Receiver"
+        org.opencontainers.image.description: "Simple webhook which receives and validate signature"
+        org.opencontainers.image.licenses: "MIT"
+        org.opencontainers.image.revision: "${GIT_COMMIT_SHA:-unknown}"
+        org.opencontainers.image.created: ${BUILD_TIMESTAMP:-unknown}"
+        com.docker.desktop.extension.icon: "https://devicons.io/devicons/icons/webhooks.svg"
+        dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
+    restart: unless-stopped
+    user: "root"
+    healthcheck:
+      test: wget -qO- http://localhost:8080/_health/ready | grep -qi "healthy" || exit 1
+      start_period: 3s
+      interval: 10s
+      timeout: 2s
+      retries: 3
+    labels:
+      dev.orbstack.domains: webhook.dev.local
+      dev.orbstack.http-port: 8080
+    volumes:
+      - webhook_data:/var/app/data
+      - common_data:/var/app/common
+    environment:
+      App__IconPath: "/var/app/common/webhook.ico"
+      Db__Type: Sqlite
+      DB__ConnectionString: "Data Source=/var/app/data/webhook.db;"
+
+volumes:
+  common_data:
+  webhook_data:

@@ -11,6 +11,7 @@ RUN --mount=type=cache,target=/root/.nuget \
         && rm /app/*.dbg
 
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine-extra
+LABEL org.opencontainers.image.source="https://github.com/fakhrulhilal/dotfiles"
 WORKDIR /home/app
 COPY --link --from=build /app .
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
