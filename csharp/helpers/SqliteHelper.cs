@@ -59,7 +59,6 @@ public static class SqliteHelper {
             await db.EnsureOpenAsync();
             await using var command = db.CreateCommand();
             command.CommandText = sql;
-            Console.WriteLine(command.CommandText);
             if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
             command.Transaction = transaction switch {
                 null => null,

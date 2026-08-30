@@ -1,0 +1,28 @@
+info:
+  name: Update config
+  type: http
+  seq: 5
+
+http:
+  method: PATCH
+  url: "{{baseUrl}}/config/:identifier"
+  headers:
+    - name: Content-Type
+      value: application/merge-patch+json
+  params:
+    - name: identifier
+      value: dockerhubpersonal
+      type: path
+  body:
+    type: json
+    data: |-
+      {
+        "validate": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

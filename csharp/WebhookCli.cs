@@ -99,6 +99,7 @@ app.MapGet("/webhook/{identifier}/{id:int}/{format:alpha=json}", FormatWebhookLo
 app.MapGet("/webhook/{identifier}", GetWebhookLog);
 app.MapPost("/webhook/{identifier}", ReceiveWebhook);
 app.MapPost("/config", CreateWebhookConfig);
+app.MapPatch("/config/{identifier}", SaveWebhookConfig);
 app.MapGet("/config/{identifier}", GetWebhookConfig).WithName("GetConfigDetails");
 try {
     await app.RunAsync();
@@ -200,6 +201,30 @@ static async ValueTask<IResult> CreateWebhookConfig(CreateConfigDto dto, IDbConn
         ? Results.CreatedAtRoute("GetConfigDetails",
             RouteValueDictionary.FromArray([KeyValuePair.Create<string, object?>("identifier", dto.Identifier)]))
         : Results.Problem("Failed to create webhook config");
+}
+
+static async ValueTask<IResult> SaveWebhookConfig(string identifier, JsonDocument patch, IDbConnection db,
+    TimeProvider clock) {
+    if (await db.GetConfig(identifier) is not { } config)
+        return Invalid(nameof(identifier), $"Webhook {identifier} is not available");
+
+    var model = new SaveConfigDto { Validate = config.Validate, Signature = config.Signature, Secret = config.Secret };
+    patch.ApplyMergePatch(model, WebOpts.Default.SaveConfigDto);
+    if (model.Validate && (model is not { Secret.Value: var secret } || string.IsNullOrWhiteSpace(secret)))
+        return Invalid(nameof(model.Secret), "Secret is required when enabling validation");
+
+    var updated = new WebhookConfig {
+        Id = config.Id,
+        Identifier = config.Identifier,
+        Signature = model.Signature,
+        Secret = model.Secret,
+        Validate = model.Validate,
+        ModifiedAt = clock.GetUtcNow().UtcDateTime
+    };
+    var savedId = await db.UpdateConfig(updated);
+    return savedId == config.Id
+        ? Results.NoContent()
+        : Results.Problem("Failed to save webhook config");
 }
 
 static async ValueTask<IResult> GetWebhookConfig(string identifier, IDbConnection db) {
@@ -529,6 +554,45 @@ internal static class Helper {
     }
 
     extension(IDbConnection db) {
+        public async ValueTask<int> UpdateConfig(WebhookConfig config, CancellationToken token = default) {
+            List<DbParameter> parameters = [
+                DbParameter.Create("identifier", config.Identifier),
+                DbParameter.Create("validate", config.Validate),
+                config.Signature is not null
+                    ? DbParameter.Create("signature", config.Signature, DbOpts.Default.SignatureConfig)
+                    : DbParameter.Blank("signature"),
+                config.Secret is not null
+                    ? DbParameter.Create("secret", config.Secret, DbOpts.Default.SecretConfig)
+                    : DbParameter.Blank("secret"),
+                DbParameter.Create("modified_at", config.ModifiedAt ?? TimeProvider.System.GetUtcNow().UtcDateTime)
+            ];
+            return db switch {
+                NpgsqlConnection postre => await postre.QueryAsync(
+                    // language=PostgreSQL
+                    """
+                    UPDATE configs SET
+                        signature = @signature,
+                        secret = @secret,
+                        validate = @validate,
+                        modified_at = @modified_at
+                    WHERE identifier = @identifier
+                    RETURNING id;
+                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
+                SqliteConnection sqlite => await sqlite.QueryAsync(
+                    // language=SQLite
+                    """
+                    UPDATE configs SET
+                        signature = @signature,
+                        secret = @secret,
+                        validate = @validate,
+                        modified_at = @modified_at
+                    WHERE identifier = @identifier
+                    RETURNING id;
+                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
+                _ => 0
+            };
+        }
+
         public async ValueTask<int> CreateConfig(WebhookConfig config, CancellationToken token = default) {
             List<DbParameter> parameters = [
                 DbParameter.Create("identifier", config.Identifier),
@@ -555,7 +619,7 @@ internal static class Helper {
                     INSERT INTO configs(identifier, validate, signature, secret, created_at)
                     VALUES(@identifier, @validate, @signature, @secret, @createdAt)
                     RETURNING id;
-                    """, DbOpts.Default.CreatedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
+                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
                 _ => 0
             };
         }
@@ -835,8 +899,8 @@ internal sealed class WebhookResponse {
     };
 }
 
-internal sealed record CreatedId(int Id) {
-    public static implicit operator int(CreatedId? id) => id?.Id ?? 0;
+internal sealed record SavedId(int Id) {
+    public static implicit operator int(SavedId? id) => id?.Id ?? 0;
 }
 
 internal sealed class WebhookConfig {
@@ -849,45 +913,61 @@ internal sealed class WebhookConfig {
     public DateTime? ModifiedAt { get; set; }
 }
 
-/// <summary>
-/// Signature configuration.
-/// </summary>
-/// <param name="Algorithm">HMAC based algorithm to calculate the hash.</param>
-/// <param name="Encoding">Final string encoding after hash calculated.</param>
-/// <param name="Header">
-/// Header name to get/put within HTTP request, f.e. X-Hub-Signature-256
-/// </param>
-/// <param name="Template">
-/// Template to build signature to compute the hash.
-/// It accepts literal string or variable under curly braces.
-/// Use <c>hash()</c> to build hashed text, otherwise, it will be treated as plain text..
-/// Applicable variables:
-/// <list type="number">
-///     <item><c>{algorithm}</c>, lowercase algorithm without 'HMAC', example: <c>sha256</c></item>
-///     <item><c>{body}</c>, Plain text HTTP request body</item>
-///     <item><c>{header:Header-Name}</c>, HTTP request header value</item>
-/// </list>
-/// <example>
-/// <c>{algorithm}=hash({body})</c> for standard WebSub.
-/// <c>hash({header:timestamp}{body})</c> combine timestamp header and body.
-/// </example>
-/// </param>
-internal sealed record SignatureConfig(
-    [property: EnumDataType(typeof(SignatureAlgorithm), ErrorMessage = "Unsupported algorithm")]
-    SignatureAlgorithm Algorithm,
-    [property: EnumDataType(typeof(SignatureEncoding), ErrorMessage = "Unsupported encoding")]
-    SignatureEncoding Encoding,
-    [property: Required] string Header,
-    [property: Required] string Template
-) {
-    public static SignatureConfig WebSub =>
-        new(SignatureAlgorithm.Sha256, SignatureEncoding.Hex, "X-Hub-Signature", "{algorithm}=hash({body})");
+internal sealed class SignatureConfig {
+    /// <summary>
+    /// HMAC based algorithm to calculate the hash.
+    /// </summary>
+    [EnumDataType(typeof(SignatureAlgorithm), ErrorMessage = "Unsupported algorithm")]
+    public SignatureAlgorithm Algorithm { get; set; }
+
+    /// <summary>
+    /// Final string encoding after hash calculated.
+    /// </summary>
+    [EnumDataType(typeof(SignatureEncoding), ErrorMessage = "Unsupported encoding")]
+    public SignatureEncoding Encoding { get; set; }
+
+    /// <summary>
+    /// Header name to get/put within HTTP request, f.e. X-Hub-Signature-256
+    /// </summary>
+    [Required]
+    public string Header { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Template to build signature to compute the hash.
+    /// It accepts literal string or variable under curly braces.
+    /// Use <c>hash()</c> to build hashed text, otherwise, it will be treated as plain text..
+    /// Applicable variables:
+    /// <list type="number">
+    ///     <item><c>{algorithm}</c>, lowercase algorithm without 'HMAC', example: <c>sha256</c></item>
+    ///     <item><c>{body}</c>, Plain text HTTP request body</item>
+    ///     <item><c>{header:Header-Name}</c>, HTTP request header value</item>
+    /// </list>
+    /// <example>
+    /// <c>{algorithm}=hash({body})</c> for standard WebSub.
+    /// <c>hash({header:timestamp}{body})</c> combine timestamp header and body.
+    /// </example>
+    /// </summary>
+    [Required]
+    public string Template { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Standard WebSub signature.
+    /// </summary>
+    public static SignatureConfig WebSub => new() {
+        Algorithm = SignatureAlgorithm.Sha256,
+        Encoding = SignatureEncoding.Hex,
+        Header = "X-Hub-Signature",
+        Template = "{algorithm}=hash({body})"
+    };
 }
 
-internal sealed record SecretConfig(
-    [property: EnumDataType(typeof(SecretEncoding), ErrorMessage = "Unsupported encoding")]
-    SecretEncoding Encoding,
-    [property: Required] string Value);
+internal sealed class SecretConfig {
+    [EnumDataType(typeof(SecretEncoding), ErrorMessage = "Unsupported encoding")]
+    public SecretEncoding Encoding { get; set; }
+
+    [Required]
+    public string Value { get; set; } = string.Empty;
+}
 
 internal sealed record CreateConfigDto(
     [property: Required, StringLength(25, MinimumLength = 2),
@@ -899,7 +979,21 @@ internal sealed record CreateConfigDto(
     [property: Required] SecretConfig Secret
 );
 
-internal sealed record GetWebhookConfigDto(string Identifier, SignatureConfig? Signature, DateTime LastModifiedAt);
+internal sealed class SaveConfigDto {
+    public bool Validate { get; set; }
+    public SignatureConfig? Signature { get; set; }
+    public SecretConfig? Secret { get; set; }
+};
+
+internal sealed record GetWebhookConfigDto(
+    string Identifier,
+    bool Validate,
+    SignatureConfig? Signature,
+    DateTime? LastModifiedAt) {
+    public GetWebhookConfigDto(WebhookConfig record) :
+        this(record.Identifier, record.Validate, record.Signature, record.ModifiedAt ?? record.CreatedAt) {
+    }
+}
 
 /// <summary>
 /// Calculated signature hash.
@@ -926,7 +1020,7 @@ enum SignatureEncoding { Hex, Base64 }
 [EnumExtensions]
 enum SecretEncoding { Plain, Base64 }
 
-[JsonSerializable(typeof(CreatedId))]
+[JsonSerializable(typeof(SavedId))]
 [JsonSerializable(typeof(WebhookConfig))]
 [JsonSerializable(typeof(WebhookRequest))]
 [JsonSourceGenerationOptions(
@@ -935,9 +1029,11 @@ enum SecretEncoding { Plain, Base64 }
 internal partial class DbOpts : JsonSerializerContext;
 
 [JsonSerializable(typeof(CreateConfigDto))]
+[JsonSerializable(typeof(SaveConfigDto))]
 [JsonSerializable(typeof(GetWebhookConfigDto))]
 [JsonSerializable(typeof(WebhookLogDto))]
 [JsonSerializable(typeof(IAsyncEnumerable<WebhookLogDto>))]
+[JsonSerializable(typeof(JsonDocument))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true)]
