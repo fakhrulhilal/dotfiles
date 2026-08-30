@@ -6,18 +6,15 @@
 using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using System.Text.RegularExpressions;
 using Dotfiles.Models;
 using Microsoft.Data.Sqlite;
-using Npgsql;
 using DbParameter = Dotfiles.Models.DbParameter;
 
 namespace Dotfiles.Helpers;
 
-public static partial class SqliteHelper {
-    private static readonly Regex WithRegex = WithPattern();
-
+public static class SqliteHelper {
     public static SqliteConnection? BuildSqliteClient(string? url, string fallbackEnvName = "DATABASE_URL") {
         if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(fallbackEnvName))
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
@@ -28,28 +25,6 @@ public static partial class SqliteHelper {
             : new SqliteConnection(url);
     }
 
-    private static string WrapSqlQuery(string rawSql) {
-        // SQLite 3.38+ supports json_object() combined with subquery results.
-        // If a CTE exists at the top level, extract and lift it to avoid syntax errors inside the subquery.
-        return WithRegex.IsMatch(rawSql)
-            // language=sqlite
-            ? $"""
-               WITH __user_cte__ AS (
-                   {rawSql}
-               )
-               SELECT json_object(*) FROM __user_cte__
-               """
-            : $"""
-               SELECT json_object(*) 
-               FROM (
-                   {rawSql}
-               ) __q__
-               """;
-    }
-
-    [GeneratedRegex(@"^\s*WITH\s+", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
-    private static partial Regex WithPattern();
-
     extension(SqliteConnection db) {
         public async ValueTask EnsureOpenAsync() {
             if (db.State == ConnectionState.Closed) await db.OpenAsync();
@@ -57,6 +32,7 @@ public static partial class SqliteHelper {
 
         public async ValueTask<int> ExecuteAsync(string sql, IReadOnlyList<DbParameter>? parameters = null,
             IDbTransaction? transaction = null) {
+            await db.EnsureOpenAsync();
             await using var command = db.CreateCommand();
             if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
             command.Transaction = transaction switch {
@@ -80,8 +56,10 @@ public static partial class SqliteHelper {
             string sql, JsonTypeInfo<T> jsonTypeInfo,
             IReadOnlyList<DbParameter>? parameters = null, IDbTransaction? transaction = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default) {
+            await db.EnsureOpenAsync();
             await using var command = db.CreateCommand();
-            command.CommandText = WrapSqlQuery(sql);
+            command.CommandText = sql;
+            Console.WriteLine(command.CommandText);
             if (parameters is { Count: > 0 }) db.PopulateParameters(command, parameters);
             command.Transaction = transaction switch {
                 null => null,
@@ -92,12 +70,74 @@ public static partial class SqliteHelper {
             // SequentialAccess prevents the driver from buffering entire rows/payloads in RAM
             await using var reader =
                 await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
+            var columns = await reader.GetColumnSchemaAsync(cancellationToken);
+            var columnMap = new string[columns.Count];
+            for (var c = 0; c < columns.Count; c++) columnMap[c] = columns[c].ColumnName;
+            using var memoryStream = new MemoryStream();
+            var propertyMap =
+                jsonTypeInfo.Properties.ToDictionary(x => x.Name, x => x, StringComparer.InvariantCultureIgnoreCase);
             while (await reader.ReadAsync(cancellationToken)) {
                 if (reader.IsDBNull(0)) continue;
 
-                await using var stream = reader.GetStream(0);
-                var item = await JsonSerializer.DeserializeAsync(stream, jsonTypeInfo, cancellationToken);
+                memoryStream.Position = 0;
+                memoryStream.SetLength(0);
+                WriteJson(memoryStream, reader);
+                ReadOnlySpan<byte> utf8Json = memoryStream.GetBuffer().AsSpan(0, (int)memoryStream.Length);
+                var item = JsonSerializer.Deserialize(utf8Json, jsonTypeInfo);
                 if (item is not null) yield return item;
+            }
+
+            yield break;
+
+            void WriteJson(MemoryStream memory, SqliteDataReader row) {
+                using var writer = new Utf8JsonWriter(memory, new JsonWriterOptions { SkipValidation = true });
+                writer.WriteStartObject();
+                for (var ordinal = 0; ordinal < row.FieldCount; ordinal++) {
+                    var columnName = columnMap[ordinal];
+                    writer.WritePropertyName(columnName);
+                    if (row.IsDBNull(ordinal)) writer.WriteNullValue();
+                    else {
+                        switch (row.GetValue(ordinal)) {
+                            case int number: writer.WriteNumberValue(number); break;
+                            case long number: writer.WriteNumberValue(number); break;
+                            case double number: writer.WriteNumberValue(number); break;
+                            case float number: writer.WriteNumberValue(number); break;
+                            case decimal number: writer.WriteNumberValue(number); break;
+                            case bool boolean: writer.WriteBooleanValue(boolean); break;
+                            case DateTime dateTime: writer.WriteStringValue(dateTime.ToString("O")); break;
+                            case DateOnly dateOnly: writer.WriteStringValue(dateOnly.ToString("O")); break;
+                            case TimeOnly timeOnly: writer.WriteStringValue(timeOnly.ToString("O")); break;
+                            case string text:
+                                var isJsonText = text.Length > 0 && (text[0] == '{' || text[0] == '[');
+                                if (!propertyMap.TryGetValue(columnName, out var propInfo)) continue;
+
+                                var targetType = Nullable.GetUnderlyingType(propInfo.PropertyType) ??
+                                                 propInfo.PropertyType;
+                                if (targetType == typeof(string))
+                                    writer.WriteStringValue(text);
+                                else if (targetType.IsClass && isJsonText)
+                                    writer.WriteRawValue(text);
+                                else if (targetType.IsEnum && propInfo.CustomConverter is JsonStringEnumConverter)
+                                    writer.WriteStringValue(text);
+                                else if (targetType.IsEnum && int.TryParse(text, out var enumNumber))
+                                    writer.WriteNumberValue(enumNumber);
+                                else if (targetType == typeof(DateTime)) {
+                                    writer.WriteStringValue(DateTime.TryParse(text, out var dt)
+                                        ? dt.ToString("O")
+                                        : text);
+                                }
+                                else if (targetType == typeof(DateTimeOffset)) {
+                                    writer.WriteStringValue(DateTimeOffset.TryParse(text, out var dto)
+                                        ? dto.ToString("O")
+                                        : text);
+                                }
+
+                                break;
+                        }
+                    }
+                }
+
+                writer.WriteEndObject();
             }
         }
 
@@ -121,7 +161,8 @@ public static partial class SqliteHelper {
                         command.Parameters.AddWithValue(parameterName, ip.Value.ToString());
                         break;
                     case DbParameter.Json json:
-                        command.Parameters.AddWithValue(parameterName, json.Value);
+                        command.Parameters.AddWithValue(parameterName,
+                            json.Value is { RootElement: var root } ? root.GetRawText() : DBNull.Value);
                         break;
                     case DbParameter.Number number:
                         command.Parameters.AddWithValue(parameterName, number.Value);
