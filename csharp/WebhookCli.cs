@@ -154,7 +154,7 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
         return await SaveAndReturn(WebhookResponse.BadRequest("Empty payload"));
     }
 
-    logger.WebhookReceived(identifier, body);
+    logger.WebhookReceived(identifier, request.ClientIp.ToString());
     if (await db.GetConfig(identifier) is not { Validate: true } config)
         return await SaveAndReturn(new WebhookResponse { Code = (int)HttpStatusCode.OK });
     if (config.Secret is null)
@@ -1046,8 +1046,8 @@ internal partial class WebOpts : JsonSerializerContext;
 internal static partial class LoggerExtensions {
     [LoggerMessage(
         LogLevel.Information,
-        "Webhook received for {Identifier} with body: {Body}")]
-    public static partial void WebhookReceived(this ILogger logger, string identifier, string? body);
+        "Webhook received for {Identifier} from {IP}")]
+    public static partial void WebhookReceived(this ILogger logger, string identifier, string ip);
 
     [LoggerMessage(LogLevel.Information, "No signature header found for identifier {Identifier}")]
     public static partial void SignatureHeaderNotFound(this ILogger logger, string identifier);
