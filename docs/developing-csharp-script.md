@@ -72,5 +72,10 @@ docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --build-arg DISTRO=resolute 
 
 # using alpine image
 docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --tag myapp:alpine -f alpine.Dockerfile .
+
+# build for all os arch
+docker buildx create --name multiarch --driver docker-container --use
+docker buildx inspect --bootstrap
+BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) GIT_COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose build --no-cache --builder multiarch --push
 ```
 </details>

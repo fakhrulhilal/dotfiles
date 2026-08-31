@@ -2,10 +2,12 @@ name: dotfiles
 
 services:
   webhook:
-    image: iroel/webhook:alpine
+    image: iroel/webhook
     container_name: webhook
     build:
-      dockerfile: alpine.Dockerfile
+      platforms:
+        - linux/amd64
+        - linux/arm64
       args:
         SCRIPT_FILE: WebhookCli.cs
       labels:
@@ -19,7 +21,7 @@ services:
     restart: unless-stopped
     user: "root"
     healthcheck:
-      test: wget -qO- http://localhost:8080/_health/ready | grep -qi "healthy" || exit 1
+      test: ["CMD", "/home/app/httpcheck", "http://localhost:8080/_health/ready"]
       start_period: 3s
       interval: 10s
       timeout: 2s
@@ -42,6 +44,7 @@ services:
 
   proxy:
     image: ngrok/ngrok:latest
+    container_name: ngrok
     labels:
       dev.orbstack.domains: proxy.webhook.dev.local
       dev.orbstack.http-port: 4040
