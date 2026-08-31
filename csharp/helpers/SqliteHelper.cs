@@ -82,7 +82,6 @@ public static class SqliteHelper {
                 memoryStream.SetLength(0);
                 WriteJson(memoryStream, reader);
                 ReadOnlySpan<byte> utf8Json = memoryStream.GetBuffer().AsSpan(0, (int)memoryStream.Length);
-                Console.WriteLine(Encoding.UTF8.GetString(utf8Json));
                 var item = JsonSerializer.Deserialize(utf8Json, jsonTypeInfo);
                 if (item is not null) yield return item;
             }

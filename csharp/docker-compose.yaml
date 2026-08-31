@@ -13,7 +13,7 @@ services:
         org.opencontainers.image.description: "Simple webhook which receives and validate signature"
         org.opencontainers.image.licenses: "MIT"
         org.opencontainers.image.revision: "${GIT_COMMIT_SHA:-unknown}"
-        org.opencontainers.image.created: ${BUILD_TIMESTAMP:-unknown}"
+        org.opencontainers.image.created: "${BUILD_TIMESTAMP:-unknown}"
         com.docker.desktop.extension.icon: "https://devicons.io/devicons/icons/webhooks.svg"
         dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
     restart: unless-stopped
@@ -31,6 +31,7 @@ services:
       - webhook_data:/var/app/data
       - common_data:/var/app/common
     environment:
+      ASPNETCORE_URLS: "http://+:8080"
       App__IconPath: "/var/app/common/webhook.ico"
       Db__Type: Sqlite
       DB__ConnectionString: "Data Source=/var/app/data/webhook.db;"
@@ -38,6 +39,19 @@ services:
       Logging__LogLevel__System: "Error"
       Logging__LogLevel__Microsoft: "Error"
       Logging__LogLevel__Microsoft.Hosting.Lifetime: "Information"
+
+  proxy:
+    image: ngrok/ngrok:latest
+    labels:
+      dev.orbstack.domains: proxy.webhook.dev.local
+      dev.orbstack.http-port: 4040
+    depends_on:
+      webhook:
+        condition: service_healthy
+    environment:
+      NGROK_AUTHTOKEN: "$NGROK_TOKEN"
+      NGROK_URL: "$NGROK_URL"
+    command: http http://webhook:8080 --url "$NGROK_URL"
 
 volumes:
   common_data:
