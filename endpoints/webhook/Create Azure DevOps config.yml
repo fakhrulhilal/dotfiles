@@ -1,0 +1,24 @@
+info:
+  name: Create Azure DevOps config
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/config"
+  body:
+    type: json
+    data: |-
+      {
+        "identifier": "azdevops",
+        "validate": false,
+        "signature": null,
+        "secret": null
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
