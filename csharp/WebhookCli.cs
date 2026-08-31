@@ -898,7 +898,8 @@ internal sealed class WebhookResponse {
         HttpStatusCode.NotFound => Results.NotFound(Text),
         HttpStatusCode.BadRequest => Results.BadRequest(Text),
         HttpStatusCode.OK => Results.Ok(),
-        _ => Results.NoContent()
+        var code when !string.IsNullOrEmpty(Text) => Results.Text(Text, statusCode: (int)code),
+        var code => Results.StatusCode((int)code)
     };
 }
 
