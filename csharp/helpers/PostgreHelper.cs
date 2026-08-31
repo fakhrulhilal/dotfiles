@@ -204,7 +204,9 @@ public static class PostgreHelper {
                         command.Parameters.AddWithValue(parameterName, NpgsqlDbType.Date, date.Value);
                         break;
                     case DbParameter.FullTime fullTime:
-                        command.Parameters.AddWithValue(parameterName, NpgsqlDbType.Timestamp, fullTime.Value);
+                        command.Parameters.AddWithValue(parameterName,
+                            fullTime.Value.Kind == DateTimeKind.Utc ? NpgsqlDbType.TimestampTz : NpgsqlDbType.Timestamp,
+                            fullTime.Value);
                         break;
                     case DbParameter.Ip ip:
                         command.Parameters.AddWithValue(parameterName, NpgsqlDbType.Inet, ip.Value);
