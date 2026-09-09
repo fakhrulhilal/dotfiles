@@ -22,6 +22,7 @@ deno = {
 }
 bun = "latest"
 python = { version = "3.12", postinstall = "pip install pipx" }
+zig = "latest"
 
 # .NET
 "dotnet:aspire.cli" = "latest"

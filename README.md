@@ -19,7 +19,7 @@ My personal shell experience
    2. [Mise](https://mise.jdx.dev), as developer tool manager
    3. [ohmyposh](https://ohmyposh.dev)
 9. Developer apps (through [mise](config/mise.toml))
-   1. Language support: Rust, Go, Deno, Nodejs, Bun, Python 3.x
+   1. Language support: Rust, Go, Deno, Nodejs, Bun, Python 3.x, Zig
    2. .NET apps: aspire CLI, C# REPL, EF core CLI, Test reporting generator
    3. AI: opencode, copilot, gemini, claude
    4. Neovim
