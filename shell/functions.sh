@@ -2,6 +2,26 @@ encode_b64() {
     printf "%s" "$1" | base64
 }
 
+urlencode() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        for (i = 0; i <= 255; i++) ord[sprintf("%c", i)] = i
+        safe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.~_-"
+        for (i = 1; i <= length(safe); i++) is_safe[substr(safe, i, 1)] = 1
+    }
+    {
+        out = ""
+        for (i = 1; i <= length($0); i++) {
+            c = substr($0, i, 1)
+            if (c in is_safe)
+                out = out c
+            else
+                out = out sprintf("%%%02X", ord[c])
+        }
+        print out
+    }'
+}
+
 build_url() {
     # parameter name, e.g. "kafka"
     name_uc=$(printf "%s" "$1" | tr '[:lower:]' '[:upper:]')
@@ -18,11 +38,11 @@ build_url() {
     # build auth segment
     auth=""
     if [ -n "$username" ] && [ -n "$password" ]; then
-      auth="$(encode_b64 "$username:$password")@"
+      auth="$(urlencode "$username"):$(urlencode "$password")@"
     elif [ -n "$username" ]; then
-      auth="$(encode_b64 "$username")@"
+      auth="$(urlencode "$username")@"
     elif [ -n "$password" ]; then
-      auth="$(encode_b64 ":$password")@"
+      auth="$(urlencode ":$password")@"
     fi
 
     # build host:port

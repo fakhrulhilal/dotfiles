@@ -12,6 +12,7 @@
 
 # IDE/editor
 .idea/
+**/*.DotSettings.user
 
 # Build output
 **/artifacts
