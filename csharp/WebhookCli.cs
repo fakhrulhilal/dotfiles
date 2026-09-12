@@ -15,6 +15,7 @@
 #:package Microsoft.Extensions.Telemetry.Abstractions@10
 #:package NetEscapades.EnumGenerators@1.0.0-beta21*
 
+using System.Collections.Frozen;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Net;
@@ -72,6 +73,7 @@ builder.Services.AddCors(opt => {
 builder.Services.AddValidation();
 builder.Services.AddSingleton<TimeProvider>(_ => TimeProvider.System);
 builder.Services.AddSingleton<ISignatureProvider, WebhookSignatureProvider>();
+builder.Services.AddSingleton<WebhookConfigProvider>();
 builder.Services.Configure<ForwardedHeadersOptions>(options => {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
@@ -95,8 +97,8 @@ app.MapGet("/favicon.ico", ([FromServices] IOptions<AppConfig> config) => config
     _ => Results.NotFound()
 });
 app.Map("/", () => "POST /webhook/{identifier}");
-app.MapGet("/webhook/{identifier}/{id:int}/{format:alpha=json}", FormatWebhookLog);
-app.MapGet("/webhook/{identifier}", GetWebhookLog);
+app.MapGet("/webhook/{identifier}/{id:int}/{format:alpha=json}", FormatWebhookLog).AddEndpointFilter(RequireCredential);
+app.MapGet("/webhook/{identifier}", GetWebhookLog).AddEndpointFilter(RequireCredential);
 app.MapPost("/webhook/{identifier}", ReceiveWebhook);
 app.MapPost("/config", CreateWebhookConfig);
 app.MapPatch("/config/{identifier}", SaveWebhookConfig);
@@ -110,6 +112,19 @@ catch (Exception exception) {
 }
 
 return;
+
+static async ValueTask<object?> RequireCredential(
+    EndpointFilterInvocationContext context, EndpointFilterDelegate next) {
+    var http = context.HttpContext;
+    if (http.Request.RouteValues["identifier"] is not string identifier) return await next(context);
+
+    var configs = http.RequestServices.GetRequiredService<WebhookConfigProvider>();
+    var credential = (await configs.GetAsync(identifier, http.RequestAborted))?.Credential;
+    if (!credential.Enabled || http.Request.HasBasicAuth(credential!)) return await next(context);
+
+    http.Response.Headers.WWWAuthenticate = "Basic";
+    return Results.Unauthorized();
+}
 
 static async ValueTask<IResult> FormatWebhookLog(
     string identifier, int id, string format,
@@ -140,7 +155,8 @@ static async ValueTask GetWebhookLog(string identifier, [FromServices] IDbConnec
 
 static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string identifier,
     [FromServices] IOptions<AppConfig> appConfig, [FromServices] IDbConnection db,
-    [FromServices] ISignatureProvider signatureProvider, [FromServices] ILogger<WebhookRequest> logger) {
+    [FromServices] WebhookConfigProvider configs, [FromServices] ISignatureProvider signatureProvider,
+    [FromServices] ILogger<WebhookRequest> logger) {
     var body = await context.Request.GetRawBody() ?? string.Empty;
     var headers = context.Request.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value.ToArray()));
     var request = new WebhookRequest {
@@ -155,20 +171,21 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
     }
 
     logger.WebhookReceived(identifier, request.ClientIp.ToString());
-    if (await db.GetConfig(identifier) is not { Validate: true } config)
+    if (await configs.GetAsync(identifier, context.RequestAborted) is not { Validate: true } config)
         return await SaveAndReturn(new WebhookResponse { Code = (int)HttpStatusCode.OK });
     if (config.Secret is null)
         return await SaveAndReturn(WebhookResponse.BadRequest("Webhook misconfigured"));
 
-    var signatureConfig = config.Signature ??= SignatureConfig.WebSub;
+    var signatureConfig = config.Signature ?? SignatureConfig.WebSub;
     if (signatureProvider.GetReceived(signatureConfig.Header, context.Request.Headers)
         is not { } actualSignature) {
         logger.SignatureHeaderNotFound(identifier);
         return await SaveAndReturn(WebhookResponse.BadRequest("Missing signature header"));
     }
 
-    if (actualSignature.Algorithm.HasValue)
-        signatureConfig.Algorithm = actualSignature.Algorithm.Value;
+    // config is shared via cache, never mutate it
+    if (actualSignature.Algorithm is { } algorithm)
+        signatureConfig = signatureConfig with { Algorithm = algorithm };
     var expectedSignature = await signatureProvider.ComputeAsync(signatureConfig, config.Secret, context.Request);
     if (expectedSignature != actualSignature) {
         logger.SignatureMissmatch(identifier, expectedSignature.Value, actualSignature.Value);
@@ -184,51 +201,53 @@ static async ValueTask<IResult> ReceiveWebhook(HttpContext context, string ident
     }
 }
 
-static async ValueTask<IResult> CreateWebhookConfig(CreateConfigDto dto, IDbConnection db, TimeProvider clock) {
+static async ValueTask<IResult> CreateWebhookConfig(CreateConfigDto dto, IDbConnection db,
+    WebhookConfigProvider configs) {
     if (await db.GetConfig(dto.Identifier) is not null)
         return Invalid(nameof(dto.Identifier), $"Webhook {dto.Identifier} is not available");
     if (dto.Validate && string.IsNullOrWhiteSpace(dto.Secret.Value))
         return Invalid(nameof(dto.Secret), "Secret is required when enabling validation");
 
-    var createdId = await db.CreateConfig(new WebhookConfig {
+    var created = await configs.SaveAsync(new WebhookConfig {
         Identifier = dto.Identifier,
         Validate = dto.Validate,
         Signature = dto.Signature,
         Secret = dto.Secret,
-        CreatedAt = clock.GetUtcNow().UtcDateTime
+        Credential = dto.Credential
     });
-    return createdId > 0
+    return created is not null
         ? Results.CreatedAtRoute("GetConfigDetails",
             RouteValueDictionary.FromArray([KeyValuePair.Create<string, object?>("identifier", dto.Identifier)]))
         : Results.Problem("Failed to create webhook config");
 }
 
 static async ValueTask<IResult> SaveWebhookConfig(string identifier, JsonDocument patch, IDbConnection db,
-    TimeProvider clock) {
+    WebhookConfigProvider configs) {
     if (await db.GetConfig(identifier) is not { } config)
         return Invalid(nameof(identifier), $"Webhook {identifier} is not available");
 
-    var model = new SaveConfigDto { Validate = config.Validate, Signature = config.Signature, Secret = config.Secret };
+    var model = new SaveConfigDto {
+        Validate = config.Validate, Signature = config.Signature, Secret = config.Secret, Credential = config.Credential
+    };
     patch.ApplyMergePatch(model, WebOpts.Default.SaveConfigDto);
     if (model.Validate && (model is not { Secret.Value: var secret } || string.IsNullOrWhiteSpace(secret)))
         return Invalid(nameof(model.Secret), "Secret is required when enabling validation");
 
-    var updated = new WebhookConfig {
-        Id = config.Id,
+    var saved = await configs.SaveAsync(new WebhookConfig {
         Identifier = config.Identifier,
         Signature = model.Signature,
         Secret = model.Secret,
-        Validate = model.Validate,
-        ModifiedAt = clock.GetUtcNow().UtcDateTime
-    };
-    var savedId = await db.UpdateConfig(updated);
-    return savedId == config.Id
+        Credential = model.Credential,
+        Validate = model.Validate
+    });
+    return saved is not null
         ? Results.NoContent()
         : Results.Problem("Failed to save webhook config");
 }
 
-static async ValueTask<IResult> GetWebhookConfig(string identifier, IDbConnection db) {
-    var config = await db.GetConfig(identifier);
+static async ValueTask<IResult> GetWebhookConfig(string identifier, WebhookConfigProvider configs,
+    CancellationToken token) {
+    var config = await configs.GetAsync(identifier, token);
     return config is not null
         ? Results.Ok(new GetWebhookConfigDto(config))
         : Results.NotFound();
@@ -253,16 +272,23 @@ internal sealed class AppConfig {
 [EnumExtensions]
 enum FormatType { Json, Curl, Fetch, Netcat }
 
-internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFactory scopeFactory) : BackgroundService {
+internal sealed class DbMigration(
+    ILogger<DbMigration> logger,
+    IServiceScopeFactory scopeFactory,
+    WebhookConfigProvider configs
+) : BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
-        using var scope = scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
-        logger.LogInformation("Migrating database using {DB}", db.ConnectionString);
-        if (db is NpgsqlConnection postgre)
-            await MigrationPostgre(postgre);
-        else if (db is SqliteConnection sqlite)
-            await MigrateSqlite(sqlite);
-        logger.LogInformation("Database migration completed");
+        using (var scope = scopeFactory.CreateScope()) {
+            var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
+            logger.LogInformation("Migrating database using {DB}", db.ConnectionString);
+            if (db is NpgsqlConnection postgre)
+                await MigrationPostgre(postgre);
+            else if (db is SqliteConnection sqlite)
+                await MigrateSqlite(sqlite);
+            logger.LogInformation("Database migration completed");
+        }
+
+        await configs.ReloadAsync(stoppingToken);
     }
 
     private async ValueTask MigrationPostgre(NpgsqlConnection db) {
@@ -350,6 +376,11 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
                     ADD COLUMN IF NOT EXISTS validate BOOLEAN NOT NULL DEFAULT TRUE;
             END $$;
             """, transaction: transaction);
+        await db.ExecuteAsync(
+            // language=PostgreSQL
+            """
+            ALTER TABLE configs ADD COLUMN IF NOT EXISTS credential JSONB;
+            """, transaction: transaction);
         await transaction.CommitAsync();
     }
 
@@ -406,13 +437,97 @@ internal sealed class DbMigration(ILogger<DbMigration> logger, IServiceScopeFact
             ALTER TABLE config_new RENAME TO configs;
             PRAGMA foreign_keys=on;
             """, transaction: transaction);
-        if (!await db.DoesColumnExistsAsync("configs", "validate", transaction))
+        if (!await db.DoesColumnExistsAsync("configs", "validate", transaction)) {
             await db.ExecuteAsync(
                 // language=SQLite
                 """
                 ALTER TABLE configs ADD COLUMN validate INTEGER NOT NULL DEFAULT 1
                 """, transaction: transaction);
+        }
+
+        if (!await db.DoesColumnExistsAsync("configs", "credential", transaction)) {
+            await db.ExecuteAsync(
+                // language=SQLite
+                """
+                ALTER TABLE configs ADD COLUMN credential TEXT
+                """, transaction: transaction);
+        }
+
+        await db.ExecuteAsync(
+            // language=SQLite
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS configs_identifier ON configs(identifier)
+            """, transaction: transaction);
         await transaction.CommitAsync();
+    }
+}
+
+/// <summary>
+/// Holds every webhook config in memory for the container lifetime. Writes go through <see cref="SaveAsync"/>,
+/// which persists the config and swaps only that entry in the cache.
+/// </summary>
+internal sealed class WebhookConfigProvider(IServiceScopeFactory scopeFactory, TimeProvider clock) {
+    private readonly SemaphoreSlim _lock = new(1, 1);
+    private FrozenDictionary<string, WebhookConfig>? _configs;
+
+    public async ValueTask<WebhookConfig?> GetAsync(string identifier, CancellationToken token = default) {
+        var configs = Volatile.Read(ref _configs) ?? await LoadAsync(force: false, token);
+        return configs.GetValueOrDefault(identifier);
+    }
+
+    public async ValueTask ReloadAsync(CancellationToken token = default) => await LoadAsync(force: true, token);
+
+    /// <summary>
+    /// Creates or updates a config by its identifier.
+    /// </summary>
+    /// <returns>The persisted config, or <c>null</c> when nothing was saved.</returns>
+    public async ValueTask<WebhookConfig?> SaveAsync(WebhookConfig config, CancellationToken token = default) {
+        await _lock.WaitAsync(CancellationToken.None);
+        try {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
+            if (await db.SaveConfig(config, clock.GetUtcNow().UtcDateTime, token) is not { } saved) return null;
+
+            // Not loaded yet: the first read will pick this row up from the DB anyway.
+            if (_configs is { } current) {
+                var updated = new Dictionary<string, WebhookConfig>(current, StringComparer.Ordinal) {
+                    [saved.Identifier] = saved
+                };
+                Volatile.Write(ref _configs, updated.ToFrozenDictionary(StringComparer.Ordinal));
+            }
+
+            return saved;
+        }
+        catch {
+            // The write may have committed before failing; drop the snapshot so the next read reloads.
+            Volatile.Write(ref _configs, null);
+            throw;
+        }
+        finally {
+            _lock.Release();
+        }
+    }
+
+    private async ValueTask<FrozenDictionary<string, WebhookConfig>> LoadAsync(bool force, CancellationToken token) {
+        // No token on the wait: a cancelled reload must still clear the stale snapshot.
+        await _lock.WaitAsync(CancellationToken.None);
+        try {
+            if (!force && _configs is { } loaded) return loaded;
+
+            // Cleared first so a failed fetch falls back to lazy reload instead of serving stale data forever.
+            Volatile.Write(ref _configs, null);
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbConnection>();
+            var fetched = new Dictionary<string, WebhookConfig>(StringComparer.Ordinal);
+            await foreach (var config in db.GetConfigs(token))
+                fetched[config.Identifier] = config;
+            var frozen = fetched.ToFrozenDictionary(StringComparer.Ordinal);
+            Volatile.Write(ref _configs, frozen);
+            return frozen;
+        }
+        finally {
+            _lock.Release();
+        }
     }
 }
 
@@ -522,6 +637,15 @@ internal static class Helper {
         return http.Connection.RemoteIpAddress;
     }
 
+    extension(Credential? credential) {
+        public bool Enabled => credential switch {
+            null => false,
+            _ when !string.IsNullOrWhiteSpace(credential.Username) ||
+                   !string.IsNullOrWhiteSpace(credential.Password) => true,
+            _ => false
+        };
+    }
+
     private static (string Host, int Port, bool Secure) GetHostAndPort(
         this Dictionary<string, string> headers, string defaultHost, int defaultPort) {
         var wrap = new Dictionary<string, string>(headers, Const.CompareMode);
@@ -554,10 +678,32 @@ internal static class Helper {
                 request.Body.Seek(0, SeekOrigin.Begin);
             return result;
         }
+
+        public bool HasBasicAuth(Credential credential) {
+            if (request.Headers.Authorization.FirstOrDefault() is not { } header ||
+                !header.StartsWith("Basic ", Const.CompareMode2))
+                return false;
+
+            byte[] decoded;
+            try {
+                decoded = Convert.FromBase64String(header["Basic ".Length..]);
+            }
+            catch (FormatException) {
+                return false;
+            }
+
+            var expected = Encoding.UTF8.GetBytes($"{credential.Username}:{credential.Password}");
+            return CryptographicOperations.FixedTimeEquals(decoded, expected);
+        }
     }
 
     extension(IDbConnection db) {
-        public async ValueTask<int> UpdateConfig(WebhookConfig config, CancellationToken token = default) {
+        /// <summary>
+        /// Inserts a new config or updates the existing one with the same identifier.
+        /// </summary>
+        /// <returns>The persisted row, or <c>null</c> when nothing was saved.</returns>
+        public async ValueTask<WebhookConfig?> SaveConfig(WebhookConfig config, DateTime timestamp,
+            CancellationToken token = default) {
             List<DbParameter> parameters = [
                 DbParameter.Create("identifier", config.Identifier),
                 DbParameter.Create("validate", config.Validate),
@@ -567,65 +713,44 @@ internal static class Helper {
                 config.Secret is not null
                     ? DbParameter.Create("secret", config.Secret, DbOpts.Default.SecretConfig)
                     : DbParameter.Blank("secret"),
-                DbParameter.Create("modified_at", config.ModifiedAt ?? TimeProvider.System.GetUtcNow().UtcDateTime)
+                config.Credential is not null
+                    ? DbParameter.Create("credential", config.Credential, DbOpts.Default.Credential)
+                    : DbParameter.Blank("credential"),
+                DbParameter.Create("timestamp", timestamp)
             ];
+            // language=SQL
+            const string sql =
+                """
+                INSERT INTO configs(identifier, validate, signature, secret, credential, created_at)
+                VALUES(@identifier, @validate, @signature, @secret, @credential, @timestamp)
+                ON CONFLICT (identifier) DO UPDATE SET
+                    validate = excluded.validate,
+                    signature = excluded.signature,
+                    secret = excluded.secret,
+                    credential = excluded.credential,
+                    modified_at = excluded.created_at
+                RETURNING *
+                """;
             return db switch {
-                NpgsqlConnection postre => await postre.QueryAsync(
-                    // language=PostgreSQL
-                    """
-                    UPDATE configs SET
-                        signature = @signature,
-                        secret = @secret,
-                        validate = @validate,
-                        modified_at = @modified_at
-                    WHERE identifier = @identifier
-                    RETURNING id;
-                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
-                SqliteConnection sqlite => await sqlite.QueryAsync(
-                    // language=SQLite
-                    """
-                    UPDATE configs SET
-                        signature = @signature,
-                        secret = @secret,
-                        validate = @validate,
-                        modified_at = @modified_at
-                    WHERE identifier = @identifier
-                    RETURNING id;
-                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
-                _ => 0
+                NpgsqlConnection postgre => await postgre
+                    .QueryAsync(sql, DbOpts.Default.WebhookConfig, parameters, cancellationToken: token)
+                    .FirstOrDefaultAsync(token),
+                SqliteConnection sqlite => await sqlite
+                    .QueryAsync(sql, DbOpts.Default.WebhookConfig, parameters, cancellationToken: token)
+                    .FirstOrDefaultAsync(token),
+                _ => null
             };
         }
 
-        public async ValueTask<int> CreateConfig(WebhookConfig config, CancellationToken token = default) {
-            List<DbParameter> parameters = [
-                DbParameter.Create("identifier", config.Identifier),
-                config.Signature is not null
-                    ? DbParameter.Create("signature", config.Signature, DbOpts.Default.SignatureConfig)
-                    : DbParameter.Blank("signature"),
-                config.Secret is not null
-                    ? DbParameter.Create("secret", config.Secret, DbOpts.Default.SecretConfig)
-                    : DbParameter.Blank("secret"),
-                DbParameter.Create("validate", config.Validate),
-                DbParameter.Create("createdAt", config.CreatedAt)
-            ];
-            return db switch {
-                NpgsqlConnection postre => await postre.QueryAsync(
-                    // language=PostgreSQL
-                    """
-                    INSERT INTO configs(identifier, validate, signature, secret, created_at)
-                    VALUES(@identifier, @validate, @signature, @secret, @createdAt)
-                    RETURNING id;
-                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
-                SqliteConnection sqlite => await sqlite.QueryAsync(
-                    // language=SQLite
-                    """
-                    INSERT INTO configs(identifier, validate, signature, secret, created_at)
-                    VALUES(@identifier, @validate, @signature, @secret, @createdAt)
-                    RETURNING id;
-                    """, DbOpts.Default.SavedId, parameters, cancellationToken: token).FirstOrDefaultAsync(token),
-                _ => 0
-            };
-        }
+        public IAsyncEnumerable<WebhookConfig> GetConfigs(CancellationToken token = default) => db switch {
+            NpgsqlConnection postgre => postgre.QueryAsync(
+                // language=PostgreSQL
+                "SELECT * FROM configs", DbOpts.Default.WebhookConfig, cancellationToken: token),
+            SqliteConnection sqlite => sqlite.QueryAsync(
+                // language=SQLite
+                "SELECT * FROM configs", DbOpts.Default.WebhookConfig, cancellationToken: token),
+            _ => AsyncEnumerable.Empty<WebhookConfig>()
+        };
 
         public async ValueTask<WebhookConfig?> GetConfig(string identifier, CancellationToken token = default) {
             DbParameter[] parameters = [
@@ -903,21 +1028,18 @@ internal sealed class WebhookResponse {
     };
 }
 
-internal sealed record SavedId(int Id) {
-    public static implicit operator int(SavedId? id) => id?.Id ?? 0;
-}
-
 internal sealed class WebhookConfig {
     public int Id { get; set; }
     public string Identifier { get; set; } = string.Empty;
     public bool Validate { get; set; }
     public SignatureConfig? Signature { get; set; }
     public SecretConfig? Secret { get; set; }
+    public Credential? Credential { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ModifiedAt { get; set; }
 }
 
-internal sealed class SignatureConfig {
+internal sealed record SignatureConfig {
     /// <summary>
     /// HMAC based algorithm to calculate the hash.
     /// </summary>
@@ -980,6 +1102,7 @@ internal sealed record CreateConfigDto(
     string Identifier,
     bool Validate,
     SignatureConfig? Signature,
+    Credential? Credential,
     [property: Required] SecretConfig Secret
 );
 
@@ -987,16 +1110,25 @@ internal sealed class SaveConfigDto {
     public bool Validate { get; set; }
     public SignatureConfig? Signature { get; set; }
     public SecretConfig? Secret { get; set; }
+    public Credential? Credential { get; set; }
 };
 
 internal sealed record GetWebhookConfigDto(
     string Identifier,
     bool Validate,
     SignatureConfig? Signature,
+    bool EnableAuth,
     DateTime? LastModifiedAt) {
     public GetWebhookConfigDto(WebhookConfig record) :
-        this(record.Identifier, record.Validate, record.Signature, record.ModifiedAt ?? record.CreatedAt) {
+        this(record.Identifier, record.Validate, record.Signature, record.Credential.Enabled,
+            record.ModifiedAt ?? record.CreatedAt) {
     }
+}
+
+// Settable (not positional) so JSON merge patch can update a single field in place.
+internal sealed record Credential {
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -1024,7 +1156,6 @@ enum SignatureEncoding { Hex, Base64 }
 [EnumExtensions]
 enum SecretEncoding { Plain, Base64 }
 
-[JsonSerializable(typeof(SavedId))]
 [JsonSerializable(typeof(WebhookConfig))]
 [JsonSerializable(typeof(WebhookRequest))]
 [JsonSourceGenerationOptions(
