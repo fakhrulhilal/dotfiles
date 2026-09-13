@@ -1,6 +1,9 @@
 [vars]
 ngrok_channel_id = "bNyj1mQVY4c"
 
+[plugins]
+"vfox-backend:csharp" = "{{ env.DOT_HOME }}/csharp/mise-plugin" # publish *Cli.cs from this repo
+
 [tools]
 usage = "latest"
 
@@ -31,6 +34,9 @@ zig = "latest"
 "dotnet:dotnet-ef" = "8"
 "dotnet:yuniql.cli" = "latest"
 "dotnet:dotnet-reportgenerator-globaltool" = "latest"
+"csharp:ClockifyCli" = "latest" # clock#
+"csharp:KafkaCli" = "latest" # kafka#
+"csharp:WebhookCli" = "latest"
 
 # AI
 opencode = "latest"

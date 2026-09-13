@@ -79,3 +79,14 @@ docker buildx inspect --bootstrap
 BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) GIT_COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose build --no-cache --builder multiarch --push
 ```
 </details>
+
+<details>
+    <summary>Mise integration</summary>
+
+```shell
+mise use -g csharp@TheScriptCli # ignore .cs extension
+
+# to force rebuilding the latest version
+mise install --force csharp@TheScriptCli
+```
+</details>

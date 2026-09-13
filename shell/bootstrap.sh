@@ -8,7 +8,7 @@ else
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-DOT_HOME="$(dirname "$SCRIPT_DIR")"
+export DOT_HOME="$(dirname "$SCRIPT_DIR")"
 
 source "$DOT_HOME/shell/functions.sh"
 
