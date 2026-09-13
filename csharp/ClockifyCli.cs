@@ -5,6 +5,7 @@
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
 
 #:include ./helpers/HttpHelper.cs
+#:include ./helpers/ClockHelper.cs
 #:include ./models/clockify/*.cs
 #:include ./models/Duration.cs
 #:include ./models/Result.cs
@@ -32,6 +33,7 @@ return 0;
 
 internal static class Const {
     public const int MaxParallelism = 5;
+    public const int PageSize = 1000;
 }
 
 [RegisterCommands]
@@ -116,9 +118,8 @@ internal sealed class Commands {
                         totalDuration += duration;
                         status = $"{duration.Display} ✅";
                     }
-                    else {
+                    else
                         status = "✅";
-                    }
                 }
 
                 await AddAndRefresh(entry.Project, entry.Task, entry.Description, time, status);
@@ -134,14 +135,12 @@ internal sealed class Commands {
                 await UiDelay();
             }
         });
-
         AnsiConsole.MarkupLine($"Total logged: [green]{totalDuration.Display}[/]");
         return 0;
 
         Result<ValidationCodes>.WithValue<AddTimeEntry[]> ValidateAndGetEntries() {
             day ??= DateOnly.FromDateTime(now.Date);
             if (string.IsNullOrEmpty(path)) return ValidationCodes.FileUnset;
-
             if (!File.Exists(path)) return ValidationCodes.FileNotFound;
 
             apiKey ??= Environment.GetEnvironmentVariable("CLOCKIFY_API_KEY");
@@ -175,6 +174,158 @@ internal sealed class Commands {
             return projects is not { Length: > 0 } ? GetInfoCodes.ProjectsNotFound : projects;
         }
     }
+
+    /// <summary>
+    ///     Show time entry report per working day, grouped by project, task, and client.
+    /// </summary>
+    /// <param name="period">today, yesterday, this-week, last-week, this-month, last-month. "_" is accepted as well, e.g. this_week.</param>
+    /// <param name="apiKey">Clockify API key. Fallback to env CLOCKIFY_API_KEY.</param>
+    /// <param name="apiUrl">Clockify API URL. Fallback to env CLOCKIFY_API_URL.</param>
+    /// <param name="reportUrl">Clockify report API URL, it's hosted separately from API URL. Fallback to env CLOCKIFY_REPORT_URL, then derived from API URL.</param>
+    /// <param name="cancellationToken"></param>
+    [Command("timesheet")]
+    public async Task<int> Timesheet(
+        [Argument] string period = "this-week",
+        [HideDefaultValue] string? apiKey = null,
+        [HideDefaultValue] string? apiUrl = null,
+        [HideDefaultValue] string? reportUrl = null,
+        CancellationToken cancellationToken = default) {
+        var validationResult = ValidateAndGetPeriod();
+        if (validationResult is not Result<ValidationCodes>.Success<TimesheetPeriod> validationSuccess) {
+            AnsiConsole.MarkupLine($"[red]ERROR[/]: {validationResult.Error.ToStringFast(true)}");
+            return 1;
+        }
+
+        using var client = BuildHttpClient(apiUrl) ??
+                           throw new InvalidOperationException("Unable to build API client");
+        client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        using var reportClient = BuildHttpClient(reportUrl) ??
+                                 throw new InvalidOperationException("Unable to build report API client");
+        reportClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        var infoResult = await AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots12)
+            .SpinnerStyle(Style.Parse("blue"))
+            .StartAsync("Getting information", async ctx => await GetInformation(ctx));
+        if (infoResult is not Result<GetInfoCodes>.Success<Timesheet> infoSuccess) {
+            AnsiConsole.MarkupLine($"[red]ERROR[/]: {infoResult.Error.ToStringFast(true)}");
+            return 1;
+        }
+
+        var timesheet = infoSuccess.Value;
+        if (timesheet.Days is []) {
+            AnsiConsole.MarkupLine(
+                $"[yellow]WARNING[/]: No working day between {timesheet.Start:ddd, d MMM yyyy} and {timesheet.End:ddd, d MMM yyyy}");
+            return 0;
+        }
+
+        var isMonthly = validationSuccess.Value is TimesheetPeriod.ThisMonth or TimesheetPeriod.LastMonth;
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var table = new Table().Border(TableBorder.Simple)
+            .Title($"Timesheet {timesheet.Start:ddd, d MMM yyyy} - {timesheet.End:ddd, d MMM yyyy}",
+                new Style(decoration: Decoration.Bold))
+            .AddColumn("Project - Task - [grey]Client[/]", x => x.LeftAligned().Footer("[bold]Total[/]"));
+        var grandTotal = Duration.Empty;
+        foreach (var day in timesheet.Days) {
+            var dayTotal = timesheet.Rows.Aggregate(Duration.Empty,
+                (total, row) => row.Durations.TryGetValue(day, out var duration) ? total + duration : total);
+            grandTotal += dayTotal;
+            var header = isMonthly ? $"{day:ddd}\n{day:%d}" : $"{day:ddd}\n{day:d MMM}";
+            table.AddColumn(day == today ? $"[blue]{header}[/]" : header, x => {
+                x.RightAligned().NoWrap().Footer(dayTotal.Display is "" ? "[grey]0:00[/]" : dayTotal.HourDisplay);
+                // a month has ~22 working days, no gap is needed to fit in the screen
+                if (isMonthly) x.PadLeft(0).PadRight(0);
+                else x.PadLeft(2).PadRight(0);
+            });
+        }
+
+        table.AddColumn("Total", x => x.RightAligned().NoWrap().PadLeft(isMonthly ? 2 : 3)
+            .Footer($"[bold green]{grandTotal.HourDisplay}[/]"));
+        foreach (var row in timesheet.Rows) {
+            var names = new List<string>(3);
+            if (!string.IsNullOrEmpty(row.Project))
+                names.Add(row.ProjectColor is { } hex && Color.TryFromHex(hex, out var color)
+                    ? $"[{color.ToMarkup()}]{Markup.Escape(row.Project)}[/]"
+                    : Markup.Escape(row.Project));
+            if (!string.IsNullOrEmpty(row.Task)) names.Add(Markup.Escape(row.Task));
+            names.Add($"[grey]{Markup.Escape(row.Client)}[/]");
+            var cells = new List<string>(timesheet.Days.Length + 2) { string.Join(" - ", names) };
+            cells.AddRange(timesheet.Days.Select(day =>
+                row.Durations.TryGetValue(day, out var duration) ? duration.HourDisplay : string.Empty));
+            cells.Add($"[bold]{row.Total.HourDisplay}[/]");
+            table.AddRow(cells.ToArray());
+        }
+
+        AnsiConsole.Write(table);
+        return 0;
+
+        Result<ValidationCodes>.WithValue<TimesheetPeriod> ValidateAndGetPeriod() {
+            // match against description, so this_week is treated as this-week
+            if (!TimesheetPeriod.TryParse(period.Replace('_', '-'), out var parsedPeriod, true, true))
+                return ValidationCodes.InvalidPeriod;
+
+            apiKey ??= Environment.GetEnvironmentVariable("CLOCKIFY_API_KEY");
+            if (string.IsNullOrEmpty(apiKey)) return ValidationCodes.ApiKeyUnset;
+
+            apiUrl ??= Environment.GetEnvironmentVariable("CLOCKIFY_API_URL");
+            if (string.IsNullOrEmpty(apiUrl)) return ValidationCodes.ApiUrlUnset;
+
+            reportUrl ??= Environment.GetEnvironmentVariable("CLOCKIFY_REPORT_URL") ?? BuildReportUrl(apiUrl);
+            return string.IsNullOrEmpty(reportUrl) ? ValidationCodes.ReportUrlUnset : parsedPeriod;
+        }
+
+        async Task<Result<GetInfoCodes>.WithValue<Timesheet>> GetInformation(StatusContext ctx) {
+            ctx.Status("Getting user information");
+            if (await client.GetUserInfo() is not { } userInfo ||
+                string.IsNullOrEmpty(userInfo.ActiveWorkspace))
+                return GetInfoCodes.UserNotFound;
+
+            ctx.Status("Getting workspace and time entry report");
+            WorkspaceId = userInfo.ActiveWorkspace;
+            var (start, end) = GetDateRange(validationSuccess.Value, DateOnly.FromDateTime(DateTime.Now),
+                userInfo.Settings.WeekStart);
+            var workspaceTask = client.GetWorkspace();
+            var reportTask = reportClient.GetDetailedReport(
+                new PostDetailedReportRequest {
+                    DateRangeStart = start.StartOfDay().ToUniversalTime(),
+                    DateRangeEnd = end.EndOfDay().ToUniversalTime(),
+                    TimeZone = TimeZoneInfo.Utc.Id,
+                    ExportType = ExportType.Json,
+                    Users = new([userInfo.Id]),
+                    DetailedFilter = new(1, Const.PageSize, new(TotalsOption.Exclude))
+                }, cancellationToken);
+            if (await workspaceTask is not { WorkspaceSettings.WorkingDays: { } workingDays })
+                return GetInfoCodes.WorkspaceNotFound;
+
+            var entries = await reportTask;
+            var days = Enumerable.Range(0, end.DayNumber - start.DayNumber + 1)
+                .Select(start.AddDays)
+                .Where(day => workingDays.Contains(day.DayOfWeek))
+                .ToArray();
+            return new Timesheet(start, end, days, GroupByDayAndProjectAndTask(entries, days));
+        }
+
+        TimesheetRow[] GroupByDayAndProjectAndTask(TimeEntryDto[] entries, DateOnly[] days) {
+            var workingDays = days.ToFrozenSet();
+            return entries
+                .Select(entry => (Entry: entry, Day: DateOnly.FromDateTime(entry.TimeInterval.Start.ToLocalTime())))
+                .Where(x => workingDays.Contains(x.Day))
+                .GroupBy(x => (
+                    Project: x.Entry.ProjectName ?? string.Empty,
+                    ProjectColor: x.Entry.ProjectColor,
+                    Task: x.Entry.TaskName ?? string.Empty,
+                    Client: x.Entry.ClientName ?? string.Empty))
+                .Select(group => new TimesheetRow(
+                    group.Key.Project,
+                    group.Key.ProjectColor,
+                    group.Key.Task,
+                    group.Key.Client,
+                    group.GroupBy(x => x.Day, x => x.Entry.TimeInterval.Duration ?? 0)
+                        .ToFrozenDictionary(x => x.Key, x => Duration.FromSeconds(x.Sum()))))
+                .OrderBy(row => row.Project)
+                .ThenBy(row => row.Task)
+                .ToArray();
+        }
+    }
 }
 
 file static class Helper {
@@ -188,6 +339,36 @@ file static class Helper {
         var start = new DateTimeOffset(new DateTime(entry.Day ?? defaultDay, entry.Start, DateTimeKind.Local));
         var end = new DateTimeOffset(new DateTime(entry.Day ?? defaultDay, entry.End, DateTimeKind.Local));
         return new(start, end, $"{start:ddd, d MMM yyyy HH:mm} - {end:HH:mm}");
+    }
+
+    public static (DateOnly Start, DateOnly End) GetDateRange(TimesheetPeriod period, DateOnly today,
+        DayOfWeek weekStart) {
+        var startOfWeek = today.AddDays(-((7 + (int)today.DayOfWeek - (int)weekStart) % 7));
+        var startOfMonth = today.StartOfMonth();
+        return period switch {
+            TimesheetPeriod.Today => (today, today),
+            TimesheetPeriod.Yesterday => (today.Yesterday(), today.Yesterday()),
+            TimesheetPeriod.ThisWeek => (startOfWeek, startOfWeek.AddDays(6)),
+            TimesheetPeriod.LastWeek => (startOfWeek.AddDays(-7), startOfWeek.AddDays(-1)),
+            TimesheetPeriod.ThisMonth => (startOfMonth, startOfMonth.EndOfMonth()),
+            TimesheetPeriod.LastMonth => (startOfMonth.AddMonths(-1), startOfMonth.AddDays(-1)),
+            _ => throw new ArgumentOutOfRangeException(nameof(period), period, "Unsupported period")
+        };
+    }
+
+    /// <summary>
+    ///     Report API is hosted differently: https://api.clockify.me/api/v1 => https://reports.api.clockify.me/v1,
+    ///     regional/subdomain https://euc1.clockify.me/api/v1 => https://euc1.clockify.me/report/v1
+    /// </summary>
+    public static string? BuildReportUrl(string apiUrl) {
+        const string globalApiHost = "api.clockify.me";
+        if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri)) return null;
+
+        var path = uri.AbsolutePath.TrimEnd('/');
+        if (path.StartsWith("/api", CompareMode2)) path = path[4..];
+        return uri.Host.Equals(globalApiHost, CompareMode2)
+            ? $"{uri.Scheme}://reports.{uri.Authority}{path}"
+            : $"{uri.Scheme}://{uri.Authority}/report{path}";
     }
 
     extension(HttpClient client) {
@@ -209,13 +390,11 @@ file static class Helper {
                 var result = await client.GetProjectByName(name);
                 if (result is not null) results.Add(result);
             });
-
             return results.ToArray();
         }
 
         private async ValueTask<GetProjectResponse?> GetProjectByName(string name) {
             ArgumentException.ThrowIfNullOrEmpty(name);
-
             if (ProjectCaches.TryGetValue(name, out var dto)) return dto;
 
             var encodedName = System.Web.HttpUtility.UrlEncode(name);
@@ -234,6 +413,29 @@ file static class Helper {
         private async ValueTask<GetTaskResponse[]> GetProjectTasks(string projectId) =>
             await client.Get($"/workspaces/{WorkspaceId}/projects/{projectId}/tasks",
                 JsonOpt.Default.GetTaskResponseArray) ?? [];
+
+        public async ValueTask<GetWorkspaceResponse?> GetWorkspace() =>
+            await client.Get($"/workspaces/{WorkspaceId}", JsonOpt.Default.GetWorkspaceResponse);
+
+        /// <summary>
+        /// Get all time entries from a detailed report, walking through all pages
+        /// </summary>
+        public async ValueTask<TimeEntryDto[]> GetDetailedReport(PostDetailedReportRequest request,
+            CancellationToken cancellationToken = default) {
+            var results = new List<TimeEntryDto>();
+            while (!cancellationToken.IsCancellationRequested) {
+                var response = await client.Post($"/workspaces/{WorkspaceId}/reports/detailed", request,
+                    JsonOpt.Default.PostDetailedReportRequest, JsonOpt.Default.PostDetailedReportResponse);
+                if (response?.TimeEntries is not { Length: > 0 } entries) break;
+
+                results.AddRange(entries);
+                if (entries.Length < request.DetailedFilter.PageSize) break;
+
+                request.DetailedFilter = request.DetailedFilter with { Page = request.DetailedFilter.Page + 1 };
+            }
+
+            return results.ToArray();
+        }
     }
 }
 
@@ -243,6 +445,9 @@ file static class Helper {
 [JsonSerializable(typeof(PostTimeEntryResponse))]
 [JsonSerializable(typeof(GetProjectResponse[]))]
 [JsonSerializable(typeof(GetTaskResponse[]))]
+[JsonSerializable(typeof(GetWorkspaceResponse))]
+[JsonSerializable(typeof(PostDetailedReportRequest))]
+[JsonSerializable(typeof(PostDetailedReportResponse))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true,
@@ -263,6 +468,38 @@ internal sealed class AddTimeEntry : TimeEntryBase {
 
 public sealed record TimeRange(DateTimeOffset Start, DateTimeOffset End, string Display);
 
+internal sealed record Timesheet(DateOnly Start, DateOnly End, DateOnly[] Days, TimesheetRow[] Rows);
+
+internal sealed record TimesheetRow(
+    string Project,
+    string? ProjectColor,
+    string Task,
+    string Client,
+    IReadOnlyDictionary<DateOnly, Duration> Durations) {
+    public Duration Total => Durations.Values.Aggregate(Duration.Empty, (total, duration) => total + duration);
+}
+
+[EnumExtensions]
+enum TimesheetPeriod {
+    [Description("today")]
+    Today,
+
+    [Description("yesterday")]
+    Yesterday,
+
+    [Description("this-week")]
+    ThisWeek,
+
+    [Description("last-week")]
+    LastWeek,
+
+    [Description("this-month")]
+    ThisMonth,
+
+    [Description("last-month")]
+    LastMonth
+}
+
 [EnumExtensions]
 enum GetInfoCodes {
     None,
@@ -271,7 +508,10 @@ enum GetInfoCodes {
     UserNotFound,
 
     [Description("Unable to get projects info")]
-    ProjectsNotFound
+    ProjectsNotFound,
+
+    [Description("Unable to get workspace info")]
+    WorkspaceNotFound
 }
 
 [EnumExtensions]
@@ -297,5 +537,11 @@ enum ValidationCodes {
     ApiKeyUnset,
 
     [Description("Clockify API URL is not set")]
-    ApiUrlUnset
+    ApiUrlUnset,
+
+    [Description("Clockify report API URL is not set")]
+    ReportUrlUnset,
+
+    [Description("Period must be one of: today, yesterday, this-week, last-week, this-month, last-month")]
+    InvalidPeriod
 }

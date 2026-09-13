@@ -57,6 +57,22 @@ public sealed partial record Duration(
         }
     }
 
+    public static Duration FromSeconds(long totalSeconds) {
+        var span = TimeSpan.FromSeconds(totalSeconds);
+        int? day = ValueOrNull(span.Days), hour = ValueOrNull(span.Hours);
+        int? minute = ValueOrNull(span.Minutes), second = ValueOrNull(span.Seconds);
+        var isoFormat = BuildIsoFormat(null, null, day, hour, minute, second);
+        var display = BuildDisplay(null, null, day, hour, minute, second);
+        return new Duration(null, null, day, hour, minute, second, display, isoFormat);
+
+        static int? ValueOrNull(int value) => value > 0 ? value : null;
+    }
+
+    /// <summary>
+    /// Total hours in h:mm format, years and months are not taken into account
+    /// </summary>
+    public string HourDisplay => $"{((Days ?? 0) * 24) + (Hours ?? 0)}:{Minutes ?? 0:00}";
+
     public override string ToString() => Value;
 
     public static Duration operator +(Duration left, Duration right) {
