@@ -54,6 +54,8 @@ My personal shell experience
     11. VPN: Tunnelblick, OpenVPN
     12. OneDrive
 12. Using [fnox](https://fnox.jdx.dev/) as secret manager
+13. Shared AI agent instructions ([AGENTS.md](AGENTS.md)) and [skills](config/ai/skills/SOURCES.md), linked into
+    `~/.claude/skills` and `~/.agents/skills`
 
 ## Installation
 

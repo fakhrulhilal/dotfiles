@@ -23,6 +23,7 @@ source "$DOT_HOME/shell/install/ohmyposh.sh"
 
 source "$DOT_HOME/shell/configure/git.sh"
 source "$DOT_HOME/shell/configure/ssh.sh"
+source "$DOT_HOME/shell/configure/ai.sh"
 case "$CURRENT_SHELL" in
     zsh) . "$DOT_HOME/shell/configure/zsh.sh" ;;
     bash) . "$DOT_HOME/shell/configure/bash.sh" ;;
