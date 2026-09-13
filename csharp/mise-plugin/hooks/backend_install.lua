@@ -12,7 +12,8 @@ function PLUGIN:BackendInstall(ctx)
         error("C# script not found: " .. file.join_path(source_dir, script))
     end
 
-    cmd.exec('dotnet publish -c Release -o "$OUT_DIR" "$SCRIPT"', {
+    -- keep pdb/dSYM/dbg out of the published bin folder
+    cmd.exec('dotnet publish -c Release -p:CopyOutputSymbolsToPublishDirectory=false -o "$OUT_DIR" "$SCRIPT"', {
         cwd = source_dir,
         env = { OUT_DIR = file.join_path(ctx.install_path, "bin"), SCRIPT = script },
     })
