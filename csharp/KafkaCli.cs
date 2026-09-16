@@ -305,6 +305,117 @@ sealed class Commands {
             return null;
         }
     }
+
+    /// <summary>
+    /// Create Kafka topic and register schemas (if any)
+    /// </summary>
+    /// <param name="topic">Topic to be created</param>
+    /// <param name="kafkaUrl">Kafka connection URL. Default: from environment variable KAFKA_URL</param>
+    /// <param name="registryUrl">Schema Registry URL. Default: from environment variable SCHEMA_REGISTRY_URL</param>
+    /// <param name="schemaFile">Schema file relative to <paramref name="schemaDir"/></param>
+    /// <param name="schemaDir">-d, Directory containing schema files. Default: from environment variable KAFKA_SCHEMA_FOLDER.</param>
+    /// <param name="partition">-p, Default number of partitions per topic when not specified in config</param>
+    /// <param name="replication">-r, Default replication factor when not specified in config</param>
+    /// <param name="cancellationToken"></param>
+    [Command("topic create")]
+    public async Task<int> CreateTopicAsync(
+        [Argument] string topic,
+        [HideDefaultValue] string? kafkaUrl = null,
+        [HideDefaultValue] string? registryUrl = null,
+        [HideDefaultValue] string? schemaFile = null,
+        [HideDefaultValue] string? schemaDir = null,
+        int partition = 3, short replication = 1,
+        CancellationToken cancellationToken = default) {
+        var error = Validate();
+        if (!string.IsNullOrEmpty(error)) {
+            Console.WriteLineInterpolated($"{CC.Red}❌ Error{CC.Default}: {error}");
+            return 1;
+        }
+
+        string? schemaPath = null;
+        Console.WriteLine("🚀 Creating Kafka topic...");
+        Console.WriteLineInterpolated($"{CC.White}⚡{CC.Default} Schema file: {CC.Cyan}{schemaPath}{CC.Default}");
+        Console.WriteLineInterpolated(
+            $"{CC.White}⚡{CC.Default} Partition: {CC.Cyan}{partition}{CC.Default}");
+        Console.WriteLineInterpolated(
+            $"{CC.White}⚡{CC.Default} Replication factor: {CC.Cyan}{replication}{CC.Default}");
+        using var adminClient =
+            BuildKafkaAdminClient(kafkaUrl, logHandler: Silence, errorHandler: Silence)
+            ?? throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
+        using var schemaRegistryClient =
+            BuildSchemaRegistryClient(registryUrl) ??
+            throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
+        switch (await adminClient.RegisterTopicAsync(topic, partition, replication)) {
+            case { Successful: true }:
+                Console.WriteLineInterpolated(
+                    $"    {CC.Green}✓{CC.Default} Topic created (partitions: {partition}, replication: {replication})");
+                break;
+            case { Successful: false, Error.Code: Codes.AlreadyExists }:
+                Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
+                break;
+            case { Successful: false, Error.Code: Codes.Unknown, Error.Message: var errorDetail }
+                when !string.IsNullOrEmpty(errorDetail):
+                Console.WriteLineInterpolated(
+                    $"    {CC.Red}✗{CC.Default} Failed to create topic: {topic}, {CC.Red}{errorDetail}{CC.Default}");
+                break;
+        }
+
+        if (!string.IsNullOrEmpty(schemaFile) && !string.IsNullOrEmpty(schemaDir)) {
+            var subject = $"{topic}-value";
+            switch (await schemaRegistryClient.RegisterSchemaAsync(topic, schemaFile, schemaDir!, cancellationToken)) {
+                case Result.Success<string> { Value: var schemaId }:
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
+                    break;
+                case { Successful: false, Error.Code: Codes.NotFound }:
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
+                    break;
+                case { Successful: false }:
+                    Console.WriteLineInterpolated(
+                        $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}");
+                    break;
+            }
+        }
+
+        Console.WriteLine("🎉 Kafka topic created successfully!");
+        return 0;
+
+        string? Validate() {
+            schemaDir ??= Environment.GetEnvironmentVariable("KAFKA_SCHEMA_FOLDER");
+            if (!string.IsNullOrEmpty(schemaDir) && !Directory.Exists(schemaDir))
+                return $"Schema directory not found: {schemaDir}";
+
+            if (!string.IsNullOrEmpty(schemaFile)) {
+                if (string.IsNullOrEmpty(schemaDir))
+                    return "Schema directory is required when specifying schema file";
+
+                schemaPath = Path.Combine(schemaDir, schemaFile);
+                if (!File.Exists(schemaPath))
+                    return $"Schema file is not found: {schemaFile}";
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Delete Kafka topic
+    /// </summary>
+    /// <param name="topic">Topic to be deleted</param>
+    /// <param name="kafkaUrl">Kafka connection URL. Default: from environment variable KAFKA_URL</param>
+    /// <param name="cancellationToken"></param>
+    [Command("topic delete")]
+    public async Task<int> DeleteTopicAsync(
+        [Argument] string topic,
+        [HideDefaultValue] string? kafkaUrl = null,
+        CancellationToken cancellationToken = default) {
+        using var adminClient =
+            BuildKafkaAdminClient(kafkaUrl, logHandler: Silence, errorHandler: Silence)
+            ?? throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
+        await adminClient.DeleteTopicsAsync([topic]);
+        return 0;
+    }
 }
 
 sealed record SchemaConfig(
