@@ -326,13 +326,13 @@ sealed class Commands {
         [HideDefaultValue] string? schemaDir = null,
         int partition = 3, short replication = 1,
         CancellationToken cancellationToken = default) {
+        string? schemaPath = null;
         var error = Validate();
         if (!string.IsNullOrEmpty(error)) {
             Console.WriteLineInterpolated($"{CC.Red}❌ Error{CC.Default}: {error}");
             return 1;
         }
 
-        string? schemaPath = null;
         Console.WriteLine("🚀 Creating Kafka topic...");
         Console.WriteLineInterpolated($"{CC.White}⚡{CC.Default} Schema file: {CC.Cyan}{schemaPath}{CC.Default}");
         Console.WriteLineInterpolated(
@@ -342,9 +342,6 @@ sealed class Commands {
         using var adminClient =
             BuildKafkaAdminClient(kafkaUrl, logHandler: Silence, errorHandler: Silence)
             ?? throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
-        using var schemaRegistryClient =
-            BuildSchemaRegistryClient(registryUrl) ??
-            throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
         switch (await adminClient.RegisterTopicAsync(topic, partition, replication)) {
             case { Successful: true }:
                 Console.WriteLineInterpolated(
@@ -361,6 +358,9 @@ sealed class Commands {
         }
 
         if (!string.IsNullOrEmpty(schemaFile) && !string.IsNullOrEmpty(schemaDir)) {
+            using var schemaRegistryClient =
+                BuildSchemaRegistryClient(registryUrl) ??
+                throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
             var subject = $"{topic}-value";
             switch (await schemaRegistryClient.RegisterSchemaAsync(topic, schemaFile, schemaDir!, cancellationToken)) {
                 case Result.Success<string> { Value: var schemaId }:
@@ -431,8 +431,7 @@ partial class JsonOpt : JsonSerializerContext;
 internal readonly record struct ProduceResult(string Payload, int Partition, long Offset);
 
 file static class Helper {
-    public static void Silence(IProducer<string?, byte[]> _, LogMessage log) {
-    }
+    public static void Silence(IProducer<string?, byte[]> _, LogMessage log) { }
 
     public static void WriteToConsole(IProducer<string?, byte[]> _, Error error) =>
         Console.WriteLineInterpolated($"{CC.Red}Error{CC.Default}: {error.Reason}");
