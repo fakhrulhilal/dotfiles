@@ -96,3 +96,19 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
    2. [zsh/aliases.zsh](zsh/aliases.zsh) for zsh only
    3. [bash/aliases.sh](bash/aliases.sh) for bash only
 6. It will automatically create secret manager folder on `$HOME/.secret`. Push it on the same git repo user under name _secret_, such as git@github.com:my_user/secret.git. Then it should be easy for next machine setup.
+7. For existing secret repo, it should generate public key pair (recommended) for new machine. 
+   Then we have to regenerate encrypted key on any previous machine, but be sure to copy public key from new machine
+   first. 
+   Run this command on old machine:
+   ```sh
+   for profile in $(fnox profiles --complete); do
+        fnox --profile $profile reencrypt --provider age --force
+   done
+   fnox doctor
+   fnox check --all
+
+   # then push secret repo so new machine can decrypt secrets
+   git add .
+   git commit -m "feat(secret): Adding new recipient"
+   git push
+   ```

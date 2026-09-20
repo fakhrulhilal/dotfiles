@@ -4,6 +4,14 @@ fi
 
 . /etc/os-release
 case "$ID" in
+    pop)
+        sudo apt install -y \
+            build-essential \
+            libc6 libgcc-s1 libstdc++6 clang zlib1g zlib1g-dev libgssapi-krb5-2 \
+            libicu74 tzdata \
+            libssl3t64 \
+            unzip zstd zst
+        ;;
     ubuntu)
         sudo apt install -y \
             build-essential \

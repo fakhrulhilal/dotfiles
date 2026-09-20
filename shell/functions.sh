@@ -267,5 +267,5 @@ install_font() {
   echo "✅ $font_name installed"
 }
 
-script_dir="$(cd "$(dirname "$0")" && pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$script_dir/functions.macos.sh"
