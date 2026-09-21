@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet --
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
-#:property AssemblyName=kafka#
+#:property AssemblyName=dotkafka
 #:property TrimmerRootDescriptor=KafkaCliTrimmerRoots.xml
 #:property TrimMode=partial
 

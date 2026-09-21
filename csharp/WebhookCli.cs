@@ -1,6 +1,7 @@
 #!/usr/bin/env dotnet
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
+#:property AssemblyName=dothook
 #:property EnableConfigurationBindingGenerator=true
 #:property NoWarn=NU1510,CS2002
 #:property StripSymbols=true

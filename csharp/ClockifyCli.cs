@@ -1,7 +1,7 @@
 #!/usr/bin/env -S dotnet --
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
-#:property AssemblyName=clock#
+#:property AssemblyName=dotclock
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
 
 #:include ./helpers/HttpHelper.cs
