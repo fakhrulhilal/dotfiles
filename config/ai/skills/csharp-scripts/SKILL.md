@@ -36,7 +36,7 @@ Run `dotnet --version` to verify the SDK is installed and note the full version,
 Create an entry-point `.cs` file using top-level statements. Place it outside any existing project directory to avoid conflicts with `.csproj` files.
 
 ```csharp
-#!/usr/bin/env dotnet
+#!/usr/bin/env dotnet --
 // hello.cs
 Console.WriteLine("Hello from a file-based app!");
 

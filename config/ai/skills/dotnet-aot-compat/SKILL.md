@@ -172,7 +172,7 @@ When most warnings are IL2026/IL3050 from `JsonSerializer.Serialize`/`Deserializ
 [JsonSerializable(typeof(SystemData))]
 // ... one attribute per type YOU OWN
 // Do NOT add types from external packages (e.g., ResponseError)
-internal partial class MyProjectJsonContext : JsonSerializerContext { }
+internal sealed partial class MyProjectJsonContext : JsonSerializerContext { }
 ```
 
 3. **Batch-update all call sites** — do not read each file individually. Apply the pattern mechanically:

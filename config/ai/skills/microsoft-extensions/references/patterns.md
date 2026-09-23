@@ -153,23 +153,34 @@ services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.Section
 
 ### Configuration Validation at Startup
 
-Use `ValidateDataAnnotations` or `ValidateOnStart` to fail fast:
+Use `ValidateOnStart` and source-generated validator to fail fast:
+
+For project based app
+```csproj
+<PropertyGroup>
+  <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+</PropertyGroup>
+```
 
 ```csharp
-public class DatabaseSettings
+// for file-based app
+#:property EnableConfigurationBindingGenerator=true
+
+public partial class DatabaseSettings
 {
     [Required]
     public required string ConnectionString { get; init; }
 
     [Range(1, 100)]
     public int MaxPoolSize { get; init; } = 10;
+
+    [OptionsValidator]
+    public sealed partial class Validator : IValidateOptions<DatabaseSettings>;
 }
 
-// Registration with validation
-services.AddOptions<DatabaseSettings>()
-    .BindConfiguration("Database")
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+// Registration with validation (with AoT compatible)
+services.AddOptionsWithValidateOnStart<DatabaseSettings, DatabaseSettings.Validator>()
+    .BindConfiguration("Database");
 ```
 
 ### Custom Validation Logic
