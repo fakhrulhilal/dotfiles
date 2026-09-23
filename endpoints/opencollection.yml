@@ -2,6 +2,17 @@ opencollection: 1.0.0
 
 info:
   name: dotfiles
+
+request:
+  variables:
+    - name: log_format_json
+      value: json
+    - name: log_format_netcat
+      value: netcat
+    - name: log_format_fetch
+      value: fetch
+    - name: log_format_curl
+      value: curl
 bundled: false
 extensions:
   bruno:
