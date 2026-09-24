@@ -110,6 +110,8 @@ redis = "8.6.2"
 "pipx:azure-cli" = { version = "latest", depends = "python" }
 "cargo:csvlens" = "latest"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
+"go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
+"go:tailscale.com/cmd/tailscaled" = "latest"
 
 [settings]
 

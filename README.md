@@ -56,6 +56,7 @@ My personal shell experience
 12. Using [fnox](https://fnox.jdx.dev/) as secret manager
 13. Shared AI agent instructions ([AGENTS.md](AGENTS.md)) and [skills](config/ai/skills/SOURCES.md), linked into
     `~/.claude/skills` and `~/.agents/skills`
+14. [Tailscale](https://tailscale.com) client without installing GUI app (functions: `ts_connect`, `ts_ssh`, `ts_exit`)
 
 ## Installation
 

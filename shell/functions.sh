@@ -268,4 +268,5 @@ install_font() {
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+. "$script_dir/functions.tailscale.sh"
 . "$script_dir/functions.macos.sh"

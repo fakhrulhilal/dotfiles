@@ -1,0 +1,33 @@
+info:
+  name: Create Tailscale config
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{baseUrl}}/config"
+  body:
+    type: json
+    data: |-
+      {
+        "identifier": "tailscale",
+        "validate": false,
+        "signature": {
+          "encoding": "hex",
+          "algorithm": "sha256",
+          "header": "Authorization",
+          "template": "hash({body})"
+        },
+        "secret": {
+          "encoding": "plain",
+          "value": "{{tailscale_secret}}"
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
