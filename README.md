@@ -113,3 +113,44 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
    git commit -m "feat(secret): Adding new recipient"
    git push
    ```
+
+# Tools
+
+[![build](https://img.shields.io/github/actions/workflow/status/fakhrulhilal/dotfiles/csharp.yml?branch=master&label=build)](https://github.com/fakhrulhilal/dotfiles/actions/workflows/csharp.yml)
+
+Native AOT builds of the C# file-based apps in [csharp/](csharp), published as GitHub releases for Linux x64,
+Windows x64/x86 and macOS arm64. Each tool is released on its own tag, `<tool>-v<version>`.
+
+| Tool       | Release                                                                                                                                                                                    | Source                                  | Description                                                                     |
+|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|---------------------------------------------------------------------------------|
+| `dotclock` | [![dotclock](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotclock-v*&label=dotclock)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotclock&expanded=true) | [ClockifyCli.cs](csharp/ClockifyCli.cs) | Clockify client: bulk-add time entries from JSON, timesheet report per work day |
+| `dotkafka` | [![dotkafka](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotkafka-v*&label=dotkafka)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotkafka&expanded=true) | [KafkaCli.cs](csharp/KafkaCli.cs)       | Kafka client: create/delete topics, register schemas, produce single or batches |
+| `dothook`  | [![dothook](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dothook-v*&label=dothook)](https://github.com/fakhrulhilal/dotfiles/releases?q=dothook&expanded=true)     | [WebhookCli.cs](csharp/WebhookCli.cs)   | Webhook receiver that logs and formats incoming requests (SQLite or PostgreSQL) |
+
+## Install with mise
+
+With an alias (recommended). Add one alias per tool to `~/.config/mise/config.toml`, then install it by name:
+
+```toml
+[tool_alias]
+dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
+dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
+dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+```
+
+```shell
+mise use -g dotclock          # latest
+mise use -g dotclock@0.1.0    # specific version
+```
+
+Without an alias, pass the backend spec directly:
+
+```shell
+mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]'
+mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]@0.1.0'
+```
+
+mise caches the version list per tool name and ignores the options in brackets, so without aliases a second tool from
+this repo would see the first tool's versions. Install only one tool this way, or use aliases.
+
+mise hides releases younger than 24 hours by default. Add `--minimum-release-age 0` to install a fresh release.
