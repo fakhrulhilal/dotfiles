@@ -1,0 +1,62 @@
+{
+  "skill_name": "rust-binary-project",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a new Rust CLI called `portwait` that waits until a TCP host:port accepts connections (e.g. `portwait db:5432 --timeout 30`), exiting 0 when it connects and 1 on timeout. Set it up so I can release it for my usual platforms and publish it as a docker image too. The GitHub repo will be fakhrulhilal/portwait and the Docker Hub image iroel/portwait. Don't commit anything, I want to try it first.",
+      "expected_output": "A new cargo project with the full standard setup (pinned nightly, dist profile, build.sh, 4 workflows, Dockerfile for linux/386+amd64+arm64, MIT license, version-independent README) plus a working portwait implementation with --version; built and tested locally; nothing committed.",
+      "files": [],
+      "assertions": [
+        "Toolchain pinned to a dated nightly in rust-toolchain.toml",
+        "Size-optimised [profile.dist] with panic = immediate-abort",
+        "Build covers all 5 release targets (x86 32/64 Linux+Windows, macOS arm64)",
+        "Container workflow targets linux/amd64, linux/386 and linux/arm64",
+        "Image pushed without provenance entries (no unknown/unknown)",
+        "Release creates and verifies artifact attestations",
+        "Release archives named <bin>-<rust-target> (mise-compatible)",
+        "MIT license in LICENSE and Cargo.toml",
+        "README version-independent: badges, latest, no CI / Exit codes section",
+        "cargo build succeeds and --version works",
+        "Nothing committed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "This repo (envcheck) needs our standard release setup: binaries for our usual platforms, a docker image, and releases people can install with mise. Keep my existing code working and don't commit anything. GitHub repo is fakhrulhilal/envcheck, Docker Hub image iroel/envcheck.",
+      "expected_output": "The existing envcheck project gains the standard setup without losing its code or README content; existing CI is updated or replaced consistently; --version added; nothing committed.",
+      "files": [
+        "fixtures/envcheck"
+      ],
+      "assertions": [
+        "Toolchain pinned to a dated nightly in rust-toolchain.toml",
+        "Size-optimised [profile.dist] with panic = immediate-abort",
+        "Build covers all 5 release targets (x86 32/64 Linux+Windows, macOS arm64)",
+        "Container workflow targets linux/amd64, linux/386 and linux/arm64",
+        "Image pushed without provenance entries (no unknown/unknown)",
+        "Release creates and verifies artifact attestations",
+        "Release archives named <bin>-<rust-target> (mise-compatible)",
+        "MIT license in LICENSE and Cargo.toml",
+        "README version-independent: badges, latest, no CI / Exit codes section",
+        "cargo build succeeds and --version works",
+        "Existing behaviour kept (exit 2 no args, 0 when set, 1 when missing)",
+        "Original README content kept",
+        "Nothing committed (still only the initial commit)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "People say my jsonq docker image on Docker Hub has no amd64 build - the Docker Hub page shows linux/amd64, linux/arm64 and two unknown/unknown entries. Also I need linux/386 there. Can you fix the image publishing? Don't commit.",
+      "expected_output": "Explains unknown/unknown are provenance attestations (amd64 is present), disables provenance/sbom, adds linux/386, ideally adds a post-push platform verification; nothing committed.",
+      "files": [
+        "fixtures/jsonq"
+      ],
+      "assertions": [
+        "Explains unknown/unknown are provenance/attestation entries (amd64 was there)",
+        "Publishes linux/amd64, linux/386 and linux/arm64",
+        "Provenance and SBOM disabled",
+        "Verifies pushed tags' platforms after pushing",
+        "Nothing committed (still only the initial commit)"
+      ]
+    }
+  ]
+}

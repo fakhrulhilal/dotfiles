@@ -1,0 +1,113 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Artifact attestations (signed SLSA build provenance).
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: archive-*
+          path: release/
+          merge-multiple: true
+
+      # The raw binaries, so a binary extracted from an archive can be verified too.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bin-*
+          path: bin/
+
+      # Every supported target must be in the release: x86 64-bit and 32-bit for
+      # Linux and Windows, plus macOS arm64.
+      - name: Check all packages are present
+        run: |
+          missing=0
+          for f in __BIN__-x86_64-unknown-linux-musl.tar.gz __BIN__-i686-unknown-linux-musl.tar.gz \
+                   __BIN__-x86_64-pc-windows-msvc.zip __BIN__-i686-pc-windows-msvc.zip \
+                   __BIN__-aarch64-apple-darwin.tar.gz; do
+            if [[ -f "release/$f" ]]; then echo "ok      $f"; else echo "::error::missing $f"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Checksums
+        working-directory: release
+        run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
+            bin/*/__BIN__*
+
+      # Fail before publishing if any asset or binary cannot be verified.
+      - name: Verify attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in release/*.tar.gz release/*.zip bin/*/__BIN__*; do
+            echo "::group::$f"
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+            echo "::endgroup::"
+          done
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  docker:
+    needs: build
+    uses: ./.github/workflows/docker.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      push: true
+      version: ${{ github.ref_name }}
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # Lists every published image (ghcr.io and Docker Hub) in the release notes.
+  release-notes:
+    needs: [release, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Add Docker images to the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAGS: ${{ needs.docker.outputs.tags }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          if grep -q '^## 🐋 Docker images' notes.md; then
+            echo "Docker images already listed"
+            exit 0
+          fi
+          {
+            printf '\n## 🐋 Docker images\n\nlinux/amd64, linux/386 and linux/arm64:\n\n```\n'
+            printf '%s\n' "$TAGS"
+            printf '```\n'
+          } >> notes.md
+          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --notes-file notes.md
+          cat notes.md

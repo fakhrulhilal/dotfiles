@@ -1,0 +1,90 @@
+name: build
+
+# Builds __BIN__ for every supported target and uploads:
+#   bin-<target>      raw binaries (used to assemble Docker images)
+#   archive-<target>  __BIN__-<target>.tar.gz / .zip (release assets, mise)
+# Targets marked `container: true` only go into the Docker image: they get no
+# release archive and are smoke-tested by the Docker job (under QEMU).
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: i686-unknown-linux-musl, os: ubuntu-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: i686-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest, container: true }
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+      EXT: ${{ contains(matrix.target, 'windows') && '.exe' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install && rustup target add "$TARGET"
+
+      - name: Install zig
+        if: contains(matrix.target, 'linux')
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install cargo-zigbuild
+        if: contains(matrix.target, 'linux')
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: scripts/build.sh "$TARGET" dist
+
+      # Add project-specific checks here (real inputs, network calls, ...).
+      - name: Smoke test
+        if: ${{ !matrix.container }}
+        run: '"dist/__BIN__$EXT" --version'
+
+      - name: Report sizes
+        run: |
+          echo "$TARGET: __BIN__$EXT is $(wc -c < "dist/__BIN__$EXT") bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package
+        if: ${{ !matrix.container }}
+        run: |
+          mkdir -p archive
+          cd dist
+          if [[ -n "$EXT" ]]; then
+            7z a -tzip "../archive/__BIN__-$TARGET.zip" __BIN__.exe
+          else
+            tar -czf "../archive/__BIN__-$TARGET.tar.gz" __BIN__
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bin-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !matrix.container }}
+        with:
+          name: archive-${{ matrix.target }}
+          path: archive/
+          if-no-files-found: error

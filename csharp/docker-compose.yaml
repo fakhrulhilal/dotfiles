@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
     user: "root"
     healthcheck:
-      test: ["CMD", "/home/app/httpcheck", "http://localhost:8080/_health/ready"]
+      test: ["CMD", "/bin/hc", "--expect-body", "healthy", "http://localhost:8080/_health/ready"]
       start_period: 3s
       interval: 10s
       timeout: 2s

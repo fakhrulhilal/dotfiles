@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+#
+# Linux image (linux/amd64, linux/386, linux/arm64), assembled from the static musl
+# binaries pre-built into dist/<rust-target>/ by scripts/build.sh. Built
+# FROM scratch: no shell, no package manager, only /bin/__BIN__.
+# The binaries need no libc from the host, so they can be copied into
+# Debian, Ubuntu, Alpine, distroless or scratch images alike.
+#
+#   docker buildx build --load --platform linux/amd64 -t __BIN__ .
+ARG TARGETARCH
+
+FROM scratch AS bin-amd64
+COPY dist/x86_64-unknown-linux-musl/__BIN__ /
+FROM scratch AS bin-386
+COPY dist/i686-unknown-linux-musl/__BIN__ /
+FROM scratch AS bin-arm64
+COPY dist/aarch64-unknown-linux-musl/__BIN__ /
+
+FROM bin-${TARGETARCH} AS bin
+
+FROM scratch
+COPY --from=bin --chmod=0755 / /bin/
+USER 65532:65532
+ENTRYPOINT ["/bin/__BIN__"]
