@@ -16,7 +16,10 @@ case "$name" in
   dothook)
     port=18080
     data=$(mktemp -d)
-    ASPNETCORE_URLS="http://127.0.0.1:$port" DB__Type=Sqlite DB__ConnectionString="Data Source=$data/webhook.db" \
+    db=$data/webhook.db
+    # a native Windows binary can't open a Git Bash path like /tmp/...
+    if command -v cygpath > /dev/null; then db=$(cygpath -m "$db"); fi
+    ASPNETCORE_URLS="http://127.0.0.1:$port" DB__Type=Sqlite DB__ConnectionString="Data Source=$db" \
       "$exe" > "$data/log.txt" 2>&1 &
     pid=$!
     trap 'kill "$pid" 2> /dev/null || true' EXIT
