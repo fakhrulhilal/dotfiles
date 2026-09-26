@@ -21,7 +21,7 @@ FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-$DISTRO-chiseled-extra
 LABEL org.opencontainers.image.source="https://github.com/fakhrulhilal/dotfiles"
 WORKDIR /home/app
 COPY --link --from=build /app .
-COPY --from=ghcr.io/tarampampam/microcheck:1 /bin/httpcheck ./httpcheck
+COPY --from=ghcr.io/fakhrulhilal/tiny-hc /bin/tiny-hc /bin/hc
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 USER $APP_UID
 ENTRYPOINT ["./launcher"]
