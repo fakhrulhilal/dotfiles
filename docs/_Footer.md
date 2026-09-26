@@ -1,0 +1,1 @@
+These pages are generated from [`docs/`](../docs). Edits made in the wiki are overwritten on the next sync.

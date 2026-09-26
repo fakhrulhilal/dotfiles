@@ -134,7 +134,7 @@ These apply to every .NET project, including the tools in `csharp/`. For work un
 ## C# file-based apps (`csharp/`)
 
 These are .NET 10 single-file apps with no `.csproj`. Project settings live in `#:` directives, and `#:include` needs SDK
-10.0.300 or later. `docs/developing-csharp-script.md` is the full guide.
+10.0.300 or later. `docs/Developing-CSharp-Script.md` is the full guide.
 
 ```shell
 # run from csharp/
