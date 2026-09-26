@@ -2,6 +2,7 @@
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
 #:property AssemblyName=dothook
+#:property Version=0.1.0
 #:property EnableConfigurationBindingGenerator=true
 #:property NoWarn=NU1510,CS2002
 #:property StripSymbols=true
