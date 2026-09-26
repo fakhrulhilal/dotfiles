@@ -114,7 +114,7 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
    git push
    ```
 
-# Tools
+## Tools
 
 [![build](https://img.shields.io/github/actions/workflow/status/fakhrulhilal/dotfiles/csharp.yml?branch=master&label=build)](https://github.com/fakhrulhilal/dotfiles/actions/workflows/csharp.yml)
 
@@ -127,7 +127,7 @@ Windows x64/x86 and macOS arm64. Each tool is released on its own tag, `<tool>-v
 | `dotkafka` | [![dotkafka](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotkafka-v*&label=dotkafka)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotkafka&expanded=true) | [KafkaCli.cs](csharp/KafkaCli.cs)       | Kafka client: create/delete topics, register schemas, produce single or batches |
 | `dothook`  | [![dothook](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dothook-v*&label=dothook)](https://github.com/fakhrulhilal/dotfiles/releases?q=dothook&expanded=true)     | [WebhookCli.cs](csharp/WebhookCli.cs)   | Webhook receiver that logs and formats incoming requests (SQLite or PostgreSQL) |
 
-## Install with mise
+### Install with mise
 
 With an alias (recommended). Add one alias per tool to `~/.config/mise/config.toml`, then install it by name:
 
