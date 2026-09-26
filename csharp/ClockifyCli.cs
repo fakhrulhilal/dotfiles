@@ -2,6 +2,7 @@
 
 #:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
 #:property AssemblyName=dotclock
+#:property Version=0.1.0
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
 
 #:include ./helpers/HttpHelper.cs

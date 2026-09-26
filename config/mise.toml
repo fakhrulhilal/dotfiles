@@ -4,6 +4,13 @@ ngrok_channel_id = "bNyj1mQVY4c"
 [plugins]
 "vfox-backend:csharp" = "{{ env.DOT_HOME }}/csharp/mise-plugin" # publish *Cli.cs from this repo
 
+# Prebuilt csharp:<Script> releases (tag <AssemblyName>-v<Version>, see .github/workflows/csharp.yml).
+# Install with `mise use -g dotclock`. One alias per tool keeps mise's version caches apart.
+[tool_alias]
+dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
+dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
+dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+
 [tools]
 usage = "latest"
 
@@ -112,6 +119,7 @@ redis = "8.6.2"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
 "go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = "latest"
+"github:nektos/act" = "latest" # Github actions simulator
 
 [settings]
 
