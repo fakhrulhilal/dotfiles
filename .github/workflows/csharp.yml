@@ -1,0 +1,197 @@
+name: csharp
+
+# Publishes the C# file-based apps that config/mise.toml installs ("csharp:<Script>") as Native AOT archives named
+# <AssemblyName>-<target>.tar.gz/.zip for Linux x64, Windows x64/x86 and macOS arm64 (Native AOT has no Linux x86).
+# Every run uploads them as workflow artifacts. Pushing a tag <AssemblyName>-v<Version> (e.g. dotclock-v0.1.0) builds
+# only that tool, checks the tag against the script's Version property and publishes a GitHub release that mise installs:
+#   mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]'
+on:
+  push:
+    branches: [ master ]
+    tags: [ "*-v*" ]
+    paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
+  pull_request:
+    paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_VERSION: 10.0.3xx
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      tool: ${{ steps.plan.outputs.tool }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Select scripts and targets
+        id: plan
+        run: |
+          prop() { dotnet build "csharp/$1.cs" -getProperty:"$2"; }
+          scripts=$(grep -oE '"csharp:[A-Za-z0-9_]+"' config/mise.toml | sed -E 's/"csharp:(.*)"/\1/')
+          selected=$scripts
+          if [[ $GITHUB_REF_TYPE == tag ]]; then
+            tool=${GITHUB_REF_NAME%-v*}
+            version=${GITHUB_REF_NAME##*-v}
+            selected=
+            for s in $scripts; do
+              if [[ $(prop "$s" AssemblyName) == "$tool" ]]; then selected=$s; fi
+            done
+            if [[ -z $selected ]]; then
+              echo "::error::no csharp:<Script> in config/mise.toml has AssemblyName '$tool'"
+              exit 1
+            fi
+            actual=$(prop "$selected" Version)
+            if [[ $actual != "$version" ]]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match csharp/$selected.cs Version=$actual"
+              exit 1
+            fi
+            echo "tool=$tool" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+          targets='[
+            { "rid": "linux-x64", "os": "ubuntu-latest" },
+            { "rid": "win-x64", "os": "windows-latest" },
+            { "rid": "win-x86", "os": "windows-latest" },
+            { "rid": "osx-arm64", "os": "macos-latest" }
+          ]'
+          # shellcheck disable=SC2086 # one script name per word
+          matrix=$(jq -nc --argjson targets "$targets" \
+            '{ include: [ $ARGS.positional[] as $s | $targets[] | . + { script: $s } ] }' --args $selected)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
+
+  build:
+    needs: plan
+    name: ${{ matrix.script }} (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      SCRIPT: ${{ matrix.script }}
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install Native AOT prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ matrix.rid }}-${{ matrix.script }}-${{ hashFiles('csharp/**/*.cs') }}
+          restore-keys: nuget-${{ matrix.rid }}-${{ matrix.script }}-
+
+      - name: Publish
+        id: package
+        run: csharp/package.sh "$SCRIPT" "$RID" dist
+
+      - name: Smoke test
+        env:
+          EXE: ${{ steps.package.outputs.exe }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: csharp/smoke.sh "$EXE" "$VERSION"
+
+      - name: Report size
+        env:
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          echo "$SCRIPT ($RID): $(basename "$ARCHIVE") is $(wc -c < "$ARCHIVE") bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.name }}-${{ steps.package.outputs.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [ plan, build ]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Artifact attestations (signed SLSA build provenance).
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      TOOL: ${{ needs.plan.outputs.tool }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ needs.plan.outputs.tool }}-*
+          path: release/
+          merge-multiple: true
+
+      - name: Check all packages are present
+        run: |
+          missing=0
+          for t in x86_64-unknown-linux-gnu.tar.gz x86_64-pc-windows-msvc.zip i686-pc-windows-msvc.zip \
+                   aarch64-apple-darwin.tar.gz; do
+            f=$TOOL-$t
+            if [[ -f "release/$f" ]]; then echo "ok      $f"; else echo "::error::missing $f"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Checksums
+        working-directory: release
+        run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
+
+      # Fail before publishing if any asset cannot be verified.
+      - name: Verify attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in release/*.tar.gz release/*.zip; do
+            gh attestation verify "$f" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/csharp.yml"
+          done
+
+      - name: Release notes
+        run: |
+          cat > notes.md <<EOF
+          Install with [mise](https://mise.jdx.dev):
+
+          \`\`\`shell
+          mise use -g 'github:${GITHUB_REPOSITORY}[version_prefix=${TOOL}-v]@${VERSION}'
+          \`\`\`
+          EOF
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ needs.plan.outputs.tool }} ${{ needs.plan.outputs.version }}
+          body_path: notes.md
+          files: release/*
+          prerelease: ${{ contains(needs.plan.outputs.version, '-') }}
+          make_latest: false
