@@ -266,7 +266,8 @@ script reports the single version `latest`, so a change only takes effect after 
 Prebuilt releases: `.github/workflows/csharp.yml` builds every `csharp:<Name>` entry for linux-x64, win-x64, win-x86
 and osx-arm64 (Native AOT has no linux-x86) with `csharp/package.sh`, checks it with `csharp/smoke.sh` and uploads
 `<AssemblyName>-<target>.tar.gz/.zip` as workflow artifacts. Each script carries its own `#:property Version=`.
-To release one tool, bump that `Version`, push, then push the tag `<AssemblyName>-v<Version>` (e.g. `dotclock-v0.1.0`).
+To release one tool, bump that `Version` and push to master. Every master run releases each script whose version has
+no tag `<AssemblyName>-v<Version>` yet (e.g. `dotclock-v0.1.0`) and creates that tag. Never push these tags by hand.
 Users install it through the `[tool_alias]` entries in `config/mise.toml` (`mise use -g dotclock`). Add an alias
 for each new tool: mise caches versions per tool name, so two `github:fakhrulhilal/dotfiles[...]` specs would share
 one cache.

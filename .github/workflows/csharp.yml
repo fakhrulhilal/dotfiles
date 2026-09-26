@@ -2,13 +2,12 @@ name: csharp
 
 # Publishes the C# file-based apps that config/mise.toml installs ("csharp:<Script>") as Native AOT archives named
 # <AssemblyName>-<target>.tar.gz/.zip for Linux x64, Windows x64/x86 and macOS arm64 (Native AOT has no Linux x86).
-# Every run uploads them as workflow artifacts. Pushing a tag <AssemblyName>-v<Version> (e.g. dotclock-v0.1.0) builds
-# only that tool, checks the tag against the script's Version property and publishes a GitHub release that mise installs:
+# Every run uploads them as workflow artifacts. On master, every script whose Version has no <AssemblyName>-v<Version>
+# tag yet (e.g. dotclock-v0.1.0) is released: bumping a script's Version releases that tool alone. mise installs it with
 #   mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]'
 on:
   push:
     branches: [ master ]
-    tags: [ "*-v*" ]
     paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
   pull_request:
     paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
@@ -16,6 +15,11 @@ on:
 
 permissions:
   contents: read
+
+# Master runs queue up, so a run only plans its releases after the previous one has tagged its own.
+concurrency:
+  group: csharp-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DOTNET_NOLOGO: "true"
@@ -27,8 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      tool: ${{ steps.plan.outputs.tool }}
-      version: ${{ steps.plan.outputs.version }}
+      releases: ${{ steps.plan.outputs.releases }}
     steps:
       - uses: actions/checkout@v7
 
@@ -36,31 +39,25 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Select scripts and targets
+      - name: Select scripts, targets and releases
         id: plan
         run: |
-          prop() { dotnet build "csharp/$1.cs" -getProperty:"$2"; }
           scripts=$(grep -oE '"csharp:[A-Za-z0-9_]+"' config/mise.toml | sed -E 's/"csharp:(.*)"/\1/')
-          selected=$scripts
-          if [[ $GITHUB_REF_TYPE == tag ]]; then
-            tool=${GITHUB_REF_NAME%-v*}
-            version=${GITHUB_REF_NAME##*-v}
-            selected=
-            for s in $scripts; do
-              if [[ $(prop "$s" AssemblyName) == "$tool" ]]; then selected=$s; fi
-            done
-            if [[ -z $selected ]]; then
-              echo "::error::no csharp:<Script> in config/mise.toml has AssemblyName '$tool'"
-              exit 1
+          releases='[]'
+          for s in $scripts; do
+            props=$(dotnet build "csharp/$s.cs" -getProperty:AssemblyName -getProperty:Version)
+            tool=$(jq -r '.Properties.AssemblyName' <<< "$props")
+            version=$(jq -r '.Properties.Version' <<< "$props")
+            tag=$tool-v$version
+            if [[ -n $(git ls-remote --tags origin "refs/tags/$tag") ]]; then
+              echo "$tag is already released"
+            else
+              echo "$tag is not released yet"
+              echo "- \`$tag\` is not released yet" >> "$GITHUB_STEP_SUMMARY"
+              releases=$(jq -c --arg tool "$tool" --arg version "$version" '. + [ { $tool, $version } ]' <<< "$releases")
             fi
-            actual=$(prop "$selected" Version)
-            if [[ $actual != "$version" ]]; then
-              echo "::error::tag $GITHUB_REF_NAME does not match csharp/$selected.cs Version=$actual"
-              exit 1
-            fi
-            echo "tool=$tool" >> "$GITHUB_OUTPUT"
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-          fi
+          done
+          echo "releases=$releases" >> "$GITHUB_OUTPUT"
           targets='[
             { "rid": "linux-x64", "os": "ubuntu-latest" },
             { "rid": "win-x64", "os": "windows-latest" },
@@ -69,7 +66,7 @@ jobs:
           ]'
           # shellcheck disable=SC2086 # one script name per word
           matrix=$(jq -nc --argjson targets "$targets" \
-            '{ include: [ $ARGS.positional[] as $s | $targets[] | . + { script: $s } ] }' --args $selected)
+            '{ include: [ $ARGS.positional[] as $s | $targets[] | . + { script: $s } ] }' --args $scripts)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "$matrix" | jq .
 
@@ -129,8 +126,16 @@ jobs:
 
   release:
     needs: [ plan, build ]
-    if: github.ref_type == 'tag'
+    # Only master releases. A tool whose packages are all built is released even if another tool's build failed.
+    if: >-
+      !cancelled() && needs.plan.result == 'success' && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/master' && needs.plan.outputs.releases != '[]'
+    name: release ${{ matrix.tool }} ${{ matrix.version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.releases) }}
     permissions:
       contents: write
       # Artifact attestations (signed SLSA build provenance).
@@ -138,12 +143,12 @@ jobs:
       attestations: write
       artifact-metadata: write
     env:
-      TOOL: ${{ needs.plan.outputs.tool }}
-      VERSION: ${{ needs.plan.outputs.version }}
+      TOOL: ${{ matrix.tool }}
+      VERSION: ${{ matrix.version }}
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: ${{ needs.plan.outputs.tool }}-*
+          pattern: ${{ matrix.tool }}-*
           path: release/
           merge-multiple: true
 
@@ -188,10 +193,12 @@ jobs:
           \`\`\`
           EOF
 
-      - uses: softprops/action-gh-release@v3
-        with:
-          name: ${{ needs.plan.outputs.tool }} ${{ needs.plan.outputs.version }}
-          body_path: notes.md
-          files: release/*
-          prerelease: ${{ contains(needs.plan.outputs.version, '-') }}
-          make_latest: false
+      # gh uploads the assets to a draft and publishes it last, so the tag only appears once the release is complete.
+      - name: Tag and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=()
+          if [[ $VERSION == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TOOL-v$VERSION" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TOOL $VERSION" --notes-file notes.md --latest=false "${prerelease[@]}"
