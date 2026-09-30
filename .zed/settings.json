@@ -1,0 +1,24 @@
+{
+  "lsp": {
+    "yaml-language-server": {
+      "settings": {
+        "yaml": {
+          "schemas": {
+            "https://raw.githubusercontent.com/opencollection-dev/opencollection/main/packages/oc-schema/src/opencollection.schema.json": [
+              "endpoints/opencollection.yml"
+            ],
+            "https://raw.githubusercontent.com/opencollection-dev/opencollection/main/packages/oc-schema/src/opencollection.schema.json#/$defs/Environment": [
+              "endpoints/environments/*.yml"
+            ],
+            "https://raw.githubusercontent.com/opencollection-dev/opencollection/main/packages/oc-schema/src/opencollection.schema.json#/$defs/Folder": [
+              "endpoints/**/folder.yml"
+            ],
+            "https://raw.githubusercontent.com/opencollection-dev/opencollection/main/packages/oc-schema/src/opencollection.schema.json#/$defs/HttpRequest": [
+              "endpoints/!(environments)/**/@(!(folder)|folder?*).yml"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

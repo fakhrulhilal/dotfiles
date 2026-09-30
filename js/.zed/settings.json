@@ -1,0 +1,12 @@
+// Bun scripts: use vtsls instead of the global deno default
+{
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["vtsls", "!deno", "!typescript-language-server", "..."],
+      "formatter": "language_server"
+    },
+    "JavaScript": {
+      "language_servers": ["vtsls", "!deno", "!typescript-language-server", "..."]
+    }
+  }
+}

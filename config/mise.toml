@@ -120,6 +120,7 @@ redis = "8.6.2"
 "go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = "latest"
 "github:nektos/act" = "latest" # Github actions simulator
+gh = "2.101.0"
 
 [settings]
 

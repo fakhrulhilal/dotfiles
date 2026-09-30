@@ -6,6 +6,9 @@ mkdir -p "$HOME/Library/Application Support/lazygit"
 relink "$DOT_HOME/config/lazygit.yml" "$HOME/Library/Application Support/lazygit/config.yml"
 mkdir -p "$HOME/Library/Application Support/com.mitchellh.ghostty"
 relink "$DOT_HOME/config/ghostty.txt" "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
+mkdir -p "$HOME/.config/zed"
+relink "$DOT_HOME/config/zed/settings.json" "$HOME/.config/zed/settings.json"
+relink "$DOT_HOME/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
 
 # Settings -> Keyboard -> Keyboard Shortcuts -> Mission Control -> Show Desktop = F11
 # Disable due to conflict with debugging shortcut (i.e. Continue)
