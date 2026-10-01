@@ -1,195 +1,212 @@
-// Zed settings
-//
-// For information on how to configure Zed, see the Zed
-// documentation: https://zed.dev/docs/configuring-zed
-//
-// To see all of Zed's default settings without changing your
-// custom settings, run the `open default settings` command
-// from the command palette or from `Zed` application menu.
 {
-    /* Duplicated key auto-commented: "agent": {
-    "default_model": {
-      "provider": "copilot_chat",
-      "model": "gpt-4.1"
+  "buffer_font_fallbacks": [
+    "Consolas",
+    "Courier New",
+    "monospace"
+  ],
+  "agent_servers": {
+    "github-copilot-cli": {
+      "type": "registry"
     },
-    "model_parameters": []
-  }, */
-    "buffer_font_fallbacks": [
-        "Consolas",
-        "Courier New",
-        "monospace"
-    ],
-    "agent_servers": {
-        "github-copilot-cli": {
-            "type": "registry"
-        },
-        "codex-acp": {
-            "type": "registry"
-        },
-        "claude-acp": {
-            "default_config_options": {
-                "mode": "auto",
-                "model": "default"
-            },
-            "type": "registry"
-        }
+    "codex-acp": {
+      "type": "registry"
     },
-    "buffer_font_family": "CaskaydiaCove Nerd Font",
-    "outline_panel": {
-        "dock": "left"
-    },
-    "collaboration_panel": {
-        "dock": "left"
-    },
-    "git_panel": {
-        "dock": "left"
-    },
-    "minimap": {
-        "show": "never",
-        "max_width_columns": 120,
-    },
-    "edit_predictions": {
-        "provider": "copilot",
-        "mode": "subtle",
-    },
-    "telemetry": {
-        "diagnostics": false,
-        "metrics": false,
-    },
-    "base_keymap": "VSCode",
-    "icon_theme": "Catppuccin Latte",
-    "theme": {
-        "mode": "system",
-        "dark": "Ayu Dark",
-        "light": "Ayu Light"
-    },
-    "ssh_connections": [
+    "claude-acp": {
+      "default_config_options": {
+        "mode": "auto",
+        "model": "sonnet"
+      },
+      "type": "registry"
+    }
+  },
+  "buffer_font_family": "CaskaydiaCove Nerd Font",
+  "outline_panel": {
+    "dock": "left"
+  },
+  "collaboration_panel": {
+    "dock": "left"
+  },
+  "git_panel": {
+    "dock": "left"
+  },
+  "minimap": {
+    "show": "never",
+    "max_width_columns": 120
+  },
+  "edit_predictions": {
+    "provider": "copilot",
+    "mode": "subtle"
+  },
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+  "base_keymap": "VSCode",
+  "icon_theme": "Catppuccin Latte",
+  "theme": {
+    "mode": "system",
+    "dark": "Ayu Dark",
+    "light": "Ayu Light"
+  },
+  "ssh_connections": [
+    {
+      "nickname": "lab@tailscale",
+      "host": "lab.tailscale",
+      "username": "iroel",
+      "projects": [
         {
-            "host": "lab",
-            "username": "iroel",
-            "projects": [
-                {
-                    "paths": ["~/proyek/dotfiles/Alias neovim"],
-                },
-            ],
-        },
-    ],
-    "agent": {
-        "button": true,
-        "enabled": true,
-        "dock": "right",
-        "default_width": 1500,
-        // fold agent actions (edits, terminal output, thinking) by default; click a card to expand it
-        "expand_edit_card": false,
-        "expand_terminal_card": false,
-        "thinking_display": "always_collapsed",
-        "default_model": {
-            "provider": "anthropic",
-            "model": "default",
-        },
+          "paths": [
+            "~/proyek/dotfiles"
+          ]
+        }
+      ]
     },
-    "ui_font_size": 14,
-    "buffer_font_size": 12,
-    "tab_size": 4,
-    "ui_font_family": "CaskaydiaCove Nerd Font",
-    "buffer_line_height": {
-        "custom": 1.4
+    {
+      "host": "lab",
+      "username": "iroel",
+      "projects": [
+        {
+          "paths": [
+            "~/proyek/dotfiles/Alias neovim"
+          ]
+        }
+      ]
+    }
+  ],
+  "agent": {
+    "button": true,
+    "enabled": true,
+    "dock": "right",
+    "default_width": 1500,
+    "expand_edit_card": false,
+    "expand_terminal_card": false,
+    "thinking_display": "always_collapsed",
+    "default_model": {
+      "provider": "anthropic",
+      "model": "default"
+    }
+  },
+  "ui_font_size": 14,
+  "buffer_font_size": 12,
+  "tab_size": 4,
+  "ui_font_family": "CaskaydiaCove Nerd Font",
+  "buffer_line_height": {
+    "custom": 1.4
+  },
+  "inlay_hints": {
+    "enabled": true
+  },
+  "format_on_save": "off",
+  "vim_mode": true,
+  "vim": {
+    "use_smartcase_find": true,
+    "default_mode": "normal"
+  },
+  "relative_line_numbers": "enabled",
+  "project_panel": {
+    "dock": "left",
+    "git_status": true,
+    "default_width": 300
+  },
+  "soft_wrap": "editor_width",
+  "terminal": {
+    "font_family": "CaskaydiaCove Nerd Font",
+    "copy_on_select": false
+  },
+  "lsp": {
+    "omnisharp": {
+      "binary": {
+        "path": "~/.local/share/omnisharp/OmniSharp",
+        "arguments": [
+          "-lsp"
+        ]
+      }
     },
-    "inlay_hints": {
-        "enabled": true,
+    "roslyn": {
+      "settings": {
+        "dotnet|projects": {
+          "dotnet_enable_file_based_programs": true,
+          "dotnet_enable_automatic_restore": true
+        }
+      }
     },
-    "format_on_save": "off",
-    "vim_mode": true,
-    "vim": {
-        "use_smartcase_find": true,
-        "default_mode": "normal",
-    },
-    "relative_line_numbers": "enabled",
-    "project_panel": {
-        "dock": "left",
-        "git_status": true,
-        "default_width": 300,
-    },
-    "soft_wrap": "editor_width",
-    "terminal": {
-        "font_family": "CaskaydiaCove Nerd Font",
-        "copy_on_select": false,
-    },
-    "lsp": {
-        "omnisharp": {
-            "binary": {
-                "path": "~/.local/share/omnisharp/OmniSharp",
-                "arguments": ["-lsp"],
-            },
-        },
-        // Roslyn (same server as VS Code C# Dev Kit) understands file-based apps (`#:package`, `#:include`);
-        // OmniSharp only loads .csproj/.sln
-        "roslyn": {
-            "settings": {
-                "dotnet|projects": {
-                    "dotnet_enable_file_based_programs": true,
-                    "dotnet_enable_automatic_restore": true,
-                },
-            },
-        },
+    "deno": {
+      "settings": {
         "deno": {
-            "settings": {
-                "deno": {
-                    "enable": true,
-                },
-            },
-        },
+          "enable": true
+        }
+      }
+    }
+  },
+  "auto_install_extensions": {
+    "ghostty": true,
+    "ssh-config": true
+  },
+  "file_types": {
+    "Git Config": [
+      "**/config/git.txt"
+    ],
+    "Git Ignore": [
+      "**/config/git-ignore.txt"
+    ],
+    "SSH Config": [
+      "**/config/ssh.txt"
+    ],
+    "env": [
+      ".env*",
+      "**/env.txt"
+    ],
+    "ini": [
+      "**/config/ghostty.txt"
+    ],
+    "XML": [
+      "xml",
+      "csproj",
+      "props"
+    ]
+  },
+  "languages": {
+    "JSON": {
+      "tab_size": 2,
+      "hard_tabs": false
     },
-    "auto_install_extensions": {
-        "ghostty": true,
-        "ssh-config": true,
+    "YAML": {
+      "tab_size": 2,
+      "hard_tabs": false
     },
-    "file_types": {
-        "Git Config": ["**/config/git.txt"],
-        "Git Ignore": ["**/config/git-ignore.txt"],
-        "SSH Config": ["**/config/ssh.txt"],
-        "env": [".env*", "**/env.txt"],
-        "ini": ["**/config/ghostty.txt"],
-        "XML": ["xml", "csproj", "props"],
+    "TypeScript": {
+      "language_servers": [
+        "vtsls",
+        "!deno",
+        "!typescript-language-server",
+        "!eslint"
+      ],
+      "formatter": "language_server"
     },
-    "languages": {
-        "JSON": {
-            "tab_size": 2,
-            "hard_tabs": false,
-        },
-        "YAML": {
-            "tab_size": 2,
-            "hard_tabs": false,
-        },
-        "TypeScript": {
-            "language_servers": [
-                "vtsls",
-                "!deno",
-                "!typescript-language-server",
-                "!eslint",
-            ],
-            "formatter": "language_server",
-        },
-        "JavaScript": {
-            "language_servers": [
-                "vtsls",
-                "!deno",
-                "!typescript-language-server",
-                "!eslint",
-            ],
-            "formatter": "language_server",
-        },
-        "TSX": {
-            "language_servers": [
-                "deno",
-                "!typescript-language-server",
-                "!vtsls",
-                "!eslint",
-            ],
-            "formatter": "language_server",
-        },
-        "CSharp": {
-            "language_servers": ["roslyn", "!omnisharp", "!csharp-ls"],
-        },
+    "JavaScript": {
+      "language_servers": [
+        "vtsls",
+        "!deno",
+        "!typescript-language-server",
+        "!eslint"
+      ],
+      "formatter": "language_server"
     },
+    "TSX": {
+      "language_servers": [
+        "deno",
+        "!typescript-language-server",
+        "!vtsls",
+        "!eslint"
+      ],
+      "formatter": "language_server"
+    },
+    "CSharp": {
+      "language_servers": [
+        "roslyn",
+        "!omnisharp",
+        "!csharp-ls"
+      ]
+    }
+  }
 }
