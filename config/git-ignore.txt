@@ -3,6 +3,7 @@
 
 # AI
 .agents
+**/skills/synced
 
 # Local configuration
 .env
