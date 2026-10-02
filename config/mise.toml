@@ -49,7 +49,7 @@ zig = "latest"
 opencode = "latest"
 "npm:@github/copilot" = "latest"
 claude-code = "latest"
-gemini-cli = "latest"
+antigravity-cli = "latest"
 
 # shell
 powershell = "latest"

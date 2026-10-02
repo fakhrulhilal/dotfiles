@@ -1,10 +1,28 @@
 {
+  "toolbar": {
+    "quick_actions": false,
+  },
   "buffer_font_fallbacks": [
     "Consolas",
     "Courier New",
     "monospace"
   ],
   "agent_servers": {
+    "mistral-vibe": {
+      "type": "registry"
+    },
+    "harn": {
+      "type": "registry"
+    },
+    "antigravity-acp": {
+      "type": "registry"
+    },
+    "kimi": {
+      "type": "registry"
+    },
+    "qwen-code": {
+      "type": "registry"
+    },
     "github-copilot-cli": {
       "type": "registry"
     },
@@ -74,6 +92,9 @@
     }
   ],
   "agent": {
+    "threads_sidebar": {
+      "default_width": 400
+    },
     "button": true,
     "enabled": true,
     "dock": "right",
@@ -105,6 +126,15 @@
   "relative_line_numbers": "enabled",
   "project_panel": {
     "dock": "left",
+    "hide_root": true,
+    "starts_open": true,
+    "hide_gitignore": true,
+    "indent_guides": {
+        "show": "never",
+    },
+    "sticky_scroll": true,
+    "file_icons": true,
+    "entry_spacing": "comfortable",
     "git_status": true,
     "default_width": 300
   },
@@ -158,6 +188,10 @@
     ],
     "ini": [
       "**/config/ghostty.txt"
+    ],
+    "JSON": [
+        "json",
+        "jsonc"
     ],
     "XML": [
       "xml",
