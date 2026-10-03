@@ -20,6 +20,14 @@ source "$DOT_HOME/zsh/functions.zsh"
 while IFS= read -r line || [ -n "$line" ]; do
   [[ -z "$line" || "$line" = \#* ]] && continue
 
+  # Selectors are quoted and may contain ';', so pass the whole line through
+  case "$line" in
+    meta:*|github:*)
+      install_mac_app "$line"
+      continue
+      ;;
+  esac
+
   # Parse ';' separated fields
   url=$(echo "$line"      | cut -d';' -f1 | xargs)
   checksum=$(echo "$line" | cut -d';' -f2 | xargs)

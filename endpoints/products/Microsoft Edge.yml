@@ -1,0 +1,16 @@
+info:
+  name: Microsoft Edge
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: https://edgeupdates.microsoft.com/api/products
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

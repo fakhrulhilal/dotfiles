@@ -22,6 +22,16 @@ install_mac_app() {
     return 1
   fi
 
+  # "meta: <line>" and "github: <line>" resolve the download URL first, see meta_parse
+  local kind="${url%%:*}" args
+  case "$kind" in
+    meta|github)
+      args=$(${kind}_parse "${url#*:}") || return 1
+      url=$(eval "${kind}_asset $args") || return 1
+      echo "🔎 Resolved $url"
+      ;;
+  esac
+
   local filename
   filename=$(_resolve_filename "$url")
   local filepath="$HOME/Downloads/$filename"
