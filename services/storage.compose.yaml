@@ -1,33 +1,71 @@
 services:
+  storage-azurite-setup:
+    image: alpine/openssl
+    container_name: storage.azurite.setup
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - tr -d '\n' < /run/secrets/app_password | openssl dgst -sha512 -binary | openssl base64 -A > /key/azurite_key
+    volumes:
+      - azurite-key_data:/key
+    profiles: [ storage, blob ]
+    secrets:
+      - app_password
+
   storage-azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
     container_name: storage.azurite
     labels:
-      - dev.orbstack.domains=azurite.storage.${DOMAIN}
+      - dev.orbstack.domains=azurite.storage.${DOMAIN},${AZURITE_ACCOUNT:-lab-account}.blob.azurite.storage.${DOMAIN}
       - dev.orbstack.http-port=10000
       - dev.orbstack.icon="https://azure.microsoft.com/svghandler/storage-blobs/?width=64"
     volumes:
       - azurite_data:/data
+      - azurite-key_data:/key:ro
     ports:
       - "10000:10000"
-      - "10001:10001"
-      - "10002:10002"
+    depends_on:
+      storage-azurite-setup:
+        condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD-SHELL", "nc -z 127.0.0.1 10000 && nc -z 127.0.0.1 10001 && nc -z 127.0.0.1 10002" ]
+      test: [ "CMD-SHELL", "nc -z 127.0.0.1 10000" ]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 5s
     restart: unless-stopped
-    command: [ "azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck" ]
+    # AZURITE_ACCOUNTS only comes from the environment, so it is read from the key file at start up.
+    # A custom account replaces the default devstoreaccount1.
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - >-
+        export AZURITE_ACCOUNTS="$${BLOB_ACCOUNT}:$$(cat /key/azurite_key)"
+        && exec azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck
     profiles: [ storage, blob ]
+    environment:
+      BLOB_ACCOUNT: ${AZURITE_ACCOUNT:-lab-account}
     networks:
       default:
         aliases:
-          - "devstoreaccount1.blob.azurite.storage.${DOMAIN}"
-          - "devstoreaccount1.table.azurite.storage.${DOMAIN}"
-          - "devstoreaccount1.queue.azurite.storage.${DOMAIN}"
+          - "${AZURITE_ACCOUNT:-lab-account}.blob.azurite.storage.${DOMAIN}"
           - azurite
+
+  storage-azurite-init:
+    image: oven/bun:1-alpine
+    container_name: storage.azurite.init
+    depends_on:
+      storage-azurite:
+        condition: service_healthy
+    profiles: [ storage, blob ]
+    volumes:
+      - ./init/azurite:/migrations:ro
+      - azurite-key_data:/key:ro
+    entrypoint: [ "bun", "/migrations/migrate.ts" ]
+    environment:
+      TZ: ${TZ}
+      # production-style URL: the account name is taken from the first label
+      BLOB_URL: http://${AZURITE_ACCOUNT:-lab-account}.blob.azurite.storage.${DOMAIN}:10000
+      BLOB_ACCOUNT_KEY_FILE: /key/azurite_key
+    restart: no
 
   storage-rustfs:
     image: rustfs/rustfs:latest
@@ -59,5 +97,6 @@ services:
 
 volumes:
   azurite_data:
+  azurite-key_data:
   rustfs_data:
   rustfs_logs:

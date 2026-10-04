@@ -1,0 +1,14 @@
+[
+  {
+    "containerName": "static-asset",
+    "acl": "public-blob"
+  },
+  {
+    "containerName": "cdn",
+    "acl": "public-container"
+  },
+  {
+    "containerName": "app-files",
+    "acl": "private"
+  }
+]
