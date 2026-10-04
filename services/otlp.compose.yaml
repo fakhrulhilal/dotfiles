@@ -1,0 +1,246 @@
+services:
+  otlp-seq:
+    image: datalust/seq:latest
+    container_name: otlp.seq
+    labels:
+      - dev.orbstack.domains=seq.otlp.${DOMAIN}
+      - dev.orbstack.icon="https://datalust.co/favicon.png"
+    ports:
+      - "8041:80"
+      - "5341:5341"
+    profiles: [ otlp ]
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: true
+    volumes:
+      - seq_data:/data
+    healthcheck:
+      test: >
+        bash -c '
+          exec 3<>/dev/tcp/localhost/80 || exit 1;
+          printf "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          grep -q "Seq node is in service" <&3 || exit 1;
+        '
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  otlp-aspire:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: otlp.aspire
+    labels:
+      - dev.orbstack.domains=aspire.otlp.${DOMAIN}
+      - dev.orbstack.icon="https://aspiredashboard.com/assets/img/logos.png"
+    # chiseled image without shell or curl, so no healthcheck can run inside it
+    restart: unless-stopped
+    profiles: [ otlp ]
+    environment:
+      ASPNETCORE_URLS: "http://*:80"
+      Dashboard__ApplicationName: "iroel.xyz Lab"
+      ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL: "http://*:4317"
+      ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL: "http://*:4318"
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: true
+      Dashboard__TelemetryLimits__MaxLogCount: 1000
+      Dashboard__TelemetryLimits__MaxTraceCount: 1000
+      Dashboard__TelemetryLimits__MaxMetricsCount: 1000
+
+  otl-grafana:
+    image: grafana/otel-lgtm
+    container_name: otlp.grafana
+    labels:
+      dev.orbstack.domains: grafana.otlp.${DOMAIN}
+      dev.orbstack.http-port: 3000
+      dev.orbstack.icon: https://grafana.com/static/img/fav32.png
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/data
+    profiles: [ otlp ]
+
+  otlp-elastic-search:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
+    container_name: otlp.elastic-search
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - dev.orbstack.domains=search.elastic.otlp.${DOMAIN}
+      - dev.orbstack.http-port=9200
+    mem_limit: 4g
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    profiles: [ otlp, elastic ]
+    restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - elastic-search_data:/usr/share/elasticsearch/data
+      - elastic-search_config:/usr/share/elasticsearch/config
+    environment:
+      discovery.type: single-node
+      ELASTIC_USERNAME: "elastic"
+      ELASTIC_PASSWORD_FILE: "/run/secrets/app_password"
+      xpack.security.enabled: true
+      ES_JAVA_OPTS: '-Xms2g -Xmx2g'
+      bootstrap.memory_lock: true
+      http.cors.enabled: true
+      http.cors.allow-credentials: true
+      http.cors.allow-headers: X-Requested-With,Content-Type,Content-Length,Authorization
+      http.cors.allow-origin: '"*"'
+    secrets:
+      - source: app_password
+        mode: 0400
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -Is -u \"$$ELASTIC_USERNAME:$$(cat /run/secrets/app_password)\" http://localhost:9200/_cluster/health | grep -q '\"timed_out\":false'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  otlp-elastic-search-init:
+    image: alpine/curl:latest
+    container_name: deps.elastic.search.init
+    depends_on:
+      otlp-elastic-search:
+        condition: service_healthy
+    restart: no
+    command: >-
+      echo "Setting kibana_system password";
+      for i in $(seq 1 10); do
+        if curl -sSf -X POST "http://otlp-elastic-search:9200/_security/user/kibana_system/_password" \
+          -H "Content-Type: application/json" \
+          --user "elastic:$$ELASTIC_PASSWORD" \
+          -d "{\"password\":\"$$KIBANA_PASSWORD\"}" > /dev/null; then
+          echo "Kibana user password updated";
+          exit 0;
+        fi
+        echo "Attempt $$i failed, retrying...";
+        sleep 2;
+      done;
+      exit 1;
+    profiles: [ otlp, elastic ]
+    environment:
+      ELASTIC_PASSWORD: "${APP_PASSWORD}"
+      KIBANA_PASSWORD: "${APP_PASSWORD}"
+
+  otlp-elastic-kibana:
+    image: docker.elastic.co/kibana/kibana:${ELK_VERSION}
+    container_name: otlp.elastic-kibana
+    profiles: [ otlp, elastic ]
+    depends_on:
+      otlp-elastic-search-init:
+        condition: service_completed_successfully
+    labels:
+      - co.elastic.logs/module=kibana
+      - dev.orbstack.domains=kibana.elastic.otlp.${DOMAIN}
+      - dev.orbstack.http-port=5601
+    mem_limit: 4g
+    ports:
+      - 5601:5601
+    restart: unless-stopped
+    volumes:
+      - elastic-kibana_data:/usr/share/kibana/data
+    environment:
+      CSP_STRICT: false
+      SERVER_NAME: "kibana.lab.iroel.xyz"
+      ELASTICSEARCH_HOSTS: "http://otlp-elastic-search:9200"
+      ELASTICSEARCH_USERNAME: "kibana_system"
+      ELASTICSEARCH_PASSWORD: "${APP_PASSWORD}"
+    healthcheck:
+      test: curl -Lfs --user "$$ELASTICSEARCH_USERNAME:$$ELASTICSEARCH_PASSWORD" http://localhost:5601/api/status | grep -q '"level":"available"'
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  otlp-quickwit:
+    image: quickwit/quickwit:v0.9.0
+    container_name: otlp.quickwit
+    labels:
+      dev.orbstack.domains: quicktwit.otlp.${DOMAIN}
+    restart: unless-stopped
+    profiles: [ otlp ]
+    command: [ "run" ]
+    volumes:
+      - quickwit_data:/quickwit/qwdata
+    healthcheck:
+      test: bash -c "echo > /dev/tcp/localhost/7280"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  otlp-rootprint:
+    image: ghcr.io/rootprint/rootprint:latest
+    container_name: otlp.rootprint
+    labels:
+      dev.orbstack.domains: rootprint.otlp.${DOMAIN}
+      dev.orbstack.http-port: 8080
+      dev.orbstack.icon: https://rootprint.io/favicon.ico
+    restart: unless-stopped
+    profiles: [ otlp ]
+    depends_on:
+      db-postgres-init:
+        condition: service_completed_successfully
+      otlp-quickwit:
+        condition: service_healthy
+    healthcheck:
+      # image is bun-based: no wget/curl
+      test: [ "CMD", "node", "-e", "fetch('http://localhost:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://rootprint:rootprint@db-postgre:5432/rootprint # URL-embedded, so avoid APP_PASSWORD special chars
+      QUICKWIT_URL: http://otlp-quickwit:7280
+      ORIGIN: https://rootprint.otlp.${DOMAIN}
+
+  otlp-rootprint-init:
+    image: oven/bun:1-alpine
+    container_name: otlp.rootprint.init
+    profiles: [ otlp ]
+    depends_on:
+      otlp-rootprint:
+        condition: service_healthy
+    user: root # named volume is root-owned
+    entrypoint: [ "bun", "/migrations/rootprint.ts" ]
+    volumes:
+      - ./init:/migrations:ro
+      - rootprint_secrets:/secrets
+    environment:
+      ROOTPRINT_URL: http://otlp-rootprint:8080
+      ORIGIN: https://rootprint.otlp.${DOMAIN}
+      ADMIN_EMAIL: ${APP_USERNAME}@${DOMAIN}
+      ADMIN_PASSWORD: ${APP_PASSWORD}
+      TOKEN_FILE: /secrets/ingest.token
+
+  otlp-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otlp.collector
+    labels:
+      dev.orbstack.domains: collector.otlp.${DOMAIN}
+      dev.orbstack.http-port: 4318
+    depends_on:
+      #grafana:
+      #  condition: service_started
+      otlp-aspire:
+        condition: service_started
+      otlp-seq:
+        condition: service_healthy
+      otlp-rootprint-init:
+        condition: service_completed_successfully
+    command: ["--config=/app/config.yaml"]
+    volumes:
+      - ./otlp.yml:/app/config.yaml:ro
+      - rootprint_secrets:/rootprint:ro
+    profiles: [ otlp ]
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+
+volumes:
+  seq_data:
+  grafana_data:
+  elastic-search_data:
+  elastic-search_config:
+  elastic-kibana_data:
+  quickwit_data:
+  rootprint_secrets:

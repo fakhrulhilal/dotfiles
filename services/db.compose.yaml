@@ -1,0 +1,139 @@
+services:
+  db-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: db.mssql
+    labels:
+      - dev.orbstack.domains=mssql.db.${DOMAIN}
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: >
+        bash -c '$(find /opt -name sqlcmd) -S localhost -C -U sa -P "$$MSSQL_SA_PASSWORD" -Q "select 1"'
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    volumes:
+      - mssql_data:/var/opt/mssql
+    profiles: [ db, sql ]
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD:-$APP_PASSWORD}"
+      MSSQL_MEMORY_LIMIT_MB: 2096
+      MSSQL_AGENT_ENABLED: true
+      TZ: ${TZ}
+
+  db-postgres:
+    image: postgres:17-alpine
+    container_name: db.postgres
+    restart: unless-stopped
+    shm_size: 2gb
+    labels:
+      - dev.orbstack.domains=postgres.db.${DOMAIN}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -p 5432 -U \"$$POSTGRES_USER\"" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    profiles: [ db, sql ]
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${DB_USERNAME:-$APP_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-$APP_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  db-postgres-init:
+    image: postgres:17-alpine
+    container_name: db.postgres.init
+    depends_on:
+      db-postgres:
+        condition: service_healthy
+    profiles: [ db ]
+    volumes:
+      - ./init/postgres:/migrations:ro
+    environment:
+      SEED: ${DB_INIT:-true}
+      TZ: ${TZ}
+      POSTGRES_SERVER: "db-postgres"
+      POSTGRES_USER: ${DB_USERNAME:-$APP_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-$APP_PASSWORD}
+    command: /migrations/migrate.sh
+    restart: no
+
+  db-mongo:
+    image: mongo
+    container_name: db.mongo
+    labels:
+      - dev.orbstack.domains=mongo.db.${DOMAIN}
+    restart: unless-stopped
+    profiles: [ db, nosql ]
+    environment:
+      TZ: ${TZ}
+      TIME_ZONE: ${TZ}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME:-$APP_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD:-$APP_PASSWORD}
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: [ "CMD-SHELL", "mongosh --quiet --port 27017 --eval \"db.adminCommand('ping').ok\" | grep -q 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - mongo_data:/data/db
+
+  db-cosmos-init:
+    image: alpine/openssl
+    container_name: db.cosmos-init
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - tr -d '\n' < /run/secrets/app_password | openssl dgst -sha512 -binary | openssl base64 -A > /key/cosmos_key
+    volumes:
+      - cosmos-key_data:/key
+    profiles: [ db, nosql ]
+    secrets:
+      - app_password
+
+  db-cosmos:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest
+    container_name: db.cosmos
+    labels:
+      - dev.orbstack.domains=cosmos.db.${DOMAIN}
+      - dev.orbstack.http-port=1234
+    volumes:
+      - cosmos_data:/data
+      - cosmos-key_data:/key:ro
+    ports:
+      - "8083:8081"
+      - "1234:1234"
+    depends_on:
+      db-cosmos-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs http://localhost:8080/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    profiles: [ db, nosql ]
+    environment:
+      # .NET and Java SDKs need https for the gateway; the Data Explorer stays http so OrbStack can proxy it
+      PROTOCOL: https
+      EXPLORER_PROTOCOL: http
+      ENABLE_TELEMETRY: false
+      KEY_FILE: /key/cosmos_key
+
+volumes:
+  mssql_data:
+  postgres_data:
+  mongo_data:
+  cosmos_data:
+  cosmos-key_data:

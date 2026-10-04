@@ -1,0 +1,5 @@
+SELECT 'CREATE ROLE n8n LOGIN PASSWORD ''n8n'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'n8n') \gexec
+
+SELECT 'CREATE DATABASE n8n OWNER n8n'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'n8n') \gexec

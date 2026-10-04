@@ -1,0 +1,77 @@
+services:
+  workflow-n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: workflow.n8n
+    labels:
+      - dev.orbstack.domains=n8n.workflow.${DOMAIN}
+      - dev.orbstack.http-port=8080
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      db-postgres-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/healthz | grep -q ok" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    profiles: [ workflow ]
+    environment:
+      TZ: ${TZ}
+      GENERIC_TIMEZONE: ${TZ}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_HOST: db-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_SCHEMA: public
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: n8n
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
+      N8N_PORT: 8080
+      #N8N_LICENSE_ACTIVATION_KEY: "grab from email from hello@info.n8n.io with subject: Your free n8n license key to unlock selected paid features"
+      N8N_EDITOR_BASE_URL: "https://n8n.workflow.${DOMAIN}"
+      WEBHOOK_URL: "https://n8n.workflow.${DOMAIN}"
+
+  workflow-noco:
+    image: nocodb/nocodb:latest
+    container_name: workflow.noco
+    labels:
+      - dev.orbstack.domains=noco.workflow.${DOMAIN}
+      - dev.orbstack.http-port=8080
+    volumes:
+      - noco_data:/usr/app/data
+    depends_on:
+      db-postgres-init:
+        condition: service_completed_successfully
+      cache-redis:
+        condition: service_healthy
+      mail-smtp4dev:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health | grep -q ." ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    profiles: [ workflow ]
+    environment:
+      PORT: 8080
+      NC_DB: "pg://db-postgres:5432?u=noco&p=noco&d=noco"
+      NC_AUTH_JWT_SECRET: "randomized-string-secret"
+      NC_ADMIN_EMAIL: ${APP_EMAIL:-$APP_USERNAME@$DOMAIN}
+      NC_ADMIN_PASSWORD: ${APP_PASSWORD}
+      NC_SMTP_FROM: "noreply@${DOMAIN}"
+      NC_SMTP_HOST: ${SMTP_HOST:-mail.smtp4dev}
+      NC_SMTP_PORT: ${SMTP_PORT:-25}
+      NC_SMTP_USERNAME: ${SMTP_USERNAME:-}
+      NC_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      NC_SMTP_SECURE: true
+      NC_REDIS_URL: "redis://cache-redis:6379/1"
+
+volumes:
+  n8n_data:
+  noco_data:

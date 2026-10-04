@@ -1,0 +1,23 @@
+services:
+  mail-smtp4dev:
+    image: rnwood/smtp4dev
+    container_name: mail.smtp4dev
+    labels:
+      - dev.orbstack.domains=smtp4dev.mail.${DOMAIN}
+      - dev.orbstack.http-port=80
+    ports:
+      - "25:25"
+    volumes:
+      - ${CERT_DIR}:/certs
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/80'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles: [ mail ]
+    environment:
+      SERVEROPTIONS__URLS: "https://*:443;http://*:80"
+      ASPNETCORE_Kestrel__Certificates__Default__Path: "/certs/dev.lab.pfx"
+      ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD}"

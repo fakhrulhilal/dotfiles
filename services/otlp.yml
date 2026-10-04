@@ -1,0 +1,73 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+extensions:
+  # token file is written by rootprint-init into the shared rootprint_secrets volume
+  bearertokenauth/rootprint:
+    filename: /rootprint/ingest.token
+
+exporters:
+
+  otlphttp/seq:
+    endpoint: http://otlp.seq:5341/ingest/otlp
+    tls:
+      insecure: true
+
+  otlp/grafana:
+    endpoint: otlp.grafana:4317
+    tls:
+      insecure: true
+
+  otlp/aspire:
+    endpoint: otlp.aspire:4317
+    tls:
+      insecure: true
+
+  # ingest key created by rootprint-init; no metrics support
+  otlphttp/rootprint:
+    endpoint: http://otlp.rootprint:8080
+    encoding: proto
+    auth:
+      authenticator: bearertokenauth/rootprint
+
+service:
+  extensions: [ bearertokenauth/rootprint ]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters:
+        - otlphttp/seq
+        - otlp/grafana
+        - otlp/aspire
+        - otlphttp/rootprint
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters:
+        - otlp/grafana
+        - otlp/aspire
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters:
+        - otlphttp/seq
+        - otlp/grafana
+        - otlp/aspire
+        - otlphttp/rootprint

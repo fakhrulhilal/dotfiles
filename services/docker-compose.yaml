@@ -1,0 +1,22 @@
+name: lab
+
+include:
+  - db.compose.yaml
+  - storage.compose.yaml
+  - cache.compose.yaml
+  - mail.compose.yaml
+  - pkg.compose.yaml
+  - message-broker.compose.yaml
+  - workflow.compose.yaml
+  - otlp.compose.yaml
+  #- path: lab/lab.compose.yaml
+  #  project_directory: .
+
+secrets:
+  app_password:
+    file: ./secrets/app_password.txt
+
+networks:
+  default:
+    name: backend
+    attachable: true

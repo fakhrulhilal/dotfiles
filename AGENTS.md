@@ -284,8 +284,14 @@ browser-console snippets, not Node modules.
 
 ## Other directories
 
-- `services/*/docker-compose.yaml`: local infrastructure stacks. Each stack has an `env.txt` template and uses OrbStack
-  `dev.orbstack.domains` labels.
+- `services/`: one Compose project. `docker-compose.yaml` includes one `<category>.compose.yaml` per service category
+  (a category with extra config files gets its own sub folder, e.g. `observability/`). `env.txt` is the single template
+  for `.env`. Conventions:
+  - Every service has a profile named after its category (extra profiles are allowed), and a healthcheck where the
+    image allows one.
+  - Service `<category>-<name>`, container `<category>.<name>`, volume `<name>_<volume>`.
+  - HTTP services expose their port through the `dev.orbstack.http-port` label next to `dev.orbstack.domains`.
+  - Run with e.g. `docker compose --profile db up -d`.
 - `powershell/`: `_profile.ps1` dot-sources every `*.ps1` in that folder. `Modules/PorkBunClient` is a standard module
   with `Public/`, `Private/` and a PSScriptAnalyzer settings file.
 - `neovim/` holds the current nvim config (lazy.nvim). `vim/` is the legacy setup; `vim/basic-rc.txt` is symlinked to

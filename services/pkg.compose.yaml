@@ -1,0 +1,26 @@
+services:
+  pkg-baget:
+    image: bagetter/bagetter:latest
+    container_name: pkg.baget
+    labels:
+      - dev.orbstack.domains=nuget.pkg.${DOMAIN}
+      - dev.orbstack.http-port=8080
+    volumes:
+      - baget_data:/data
+    healthcheck:
+      test: >
+        wget -qO- http://localhost:8080/health | grep '"Status": *"Healthy"'
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    profiles: [ pkg ]
+    environment:
+      Storage__Type: FileSystem
+      Storage__Path: /data
+      Database__Type: Sqlite
+      Database__ConnectionString: "Data Source=/app/baget.db"
+      Search__Type: Database
+
+volumes:
+  baget_data:

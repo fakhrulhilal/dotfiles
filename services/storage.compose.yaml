@@ -1,0 +1,63 @@
+services:
+  storage-azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: storage.azurite
+    labels:
+      - dev.orbstack.domains=azurite.storage.${DOMAIN}
+      - dev.orbstack.http-port=10000
+      - dev.orbstack.icon="https://azure.microsoft.com/svghandler/storage-blobs/?width=64"
+    volumes:
+      - azurite_data:/data
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z 127.0.0.1 10000 && nc -z 127.0.0.1 10001 && nc -z 127.0.0.1 10002" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    command: [ "azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck" ]
+    profiles: [ storage, blob ]
+    networks:
+      default:
+        aliases:
+          - "devstoreaccount1.blob.azurite.storage.${DOMAIN}"
+          - "devstoreaccount1.table.azurite.storage.${DOMAIN}"
+          - "devstoreaccount1.queue.azurite.storage.${DOMAIN}"
+          - azurite
+
+  storage-rustfs:
+    image: rustfs/rustfs:latest
+    container_name: storage.rustfs
+    labels:
+      - dev.orbstack.domains=rustfs.storage.${DOMAIN}
+      - dev.orbstack.http-port=9001
+    volumes:
+      - rustfs_data:/data
+      - rustfs_logs:/logs
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs http://localhost:9000/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles: [ storage, s3 ]
+    environment:
+      TZ: ${TZ}
+      RUSTFS_ACCESS_KEY: ${APP_USERNAME}
+      RUSTFS_SECRET_KEY: ${APP_PASSWORD}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: true
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+
+volumes:
+  azurite_data:
+  rustfs_data:
+  rustfs_logs:
