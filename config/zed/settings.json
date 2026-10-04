@@ -128,7 +128,7 @@
     "dock": "left",
     "hide_root": true,
     "starts_open": true,
-    "hide_gitignore": true,
+    "hide_gitignore": false,
     "indent_guides": {
         "show": "never",
     },

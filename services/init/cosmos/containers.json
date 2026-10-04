@@ -1,0 +1,12 @@
+[
+  {
+    "containerName": "audits",
+    "partitionKey": "/tenantId",
+    "throughput": null
+  },
+  {
+    "containerName": "notifications",
+    "partitionKey": "/tenantId",
+    "throughput": 300
+  }
+]

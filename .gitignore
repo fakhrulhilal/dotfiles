@@ -11,7 +11,7 @@ project.lock.json
 /staging/
 /Packages/
 *.nuget.props
-node_modules/
+**/node_modules/
 jspm_modules/
 *.db
 
