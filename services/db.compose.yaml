@@ -24,6 +24,23 @@ services:
       MSSQL_AGENT_ENABLED: true
       TZ: ${TZ}
 
+  db-mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: db.mssql.init
+    depends_on:
+      db-mssql:
+        condition: service_healthy
+    profiles: [ db ]
+    volumes:
+      - ./init/mssql:/migrations:ro
+    environment:
+      TZ: ${TZ}
+      DB_HOST: "db-mssql"
+      DB_USERNAME: ${DB_USERNAME:-sa}
+      DB_PASSWORD: ${DB_PASSWORD:-$APP_PASSWORD}
+    command: /migrations/migrate.sh
+    restart: no
+
   db-postgres:
     image: postgres:17-alpine
     container_name: db.postgres
