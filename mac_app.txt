@@ -21,6 +21,7 @@ https://discord.com/api/download?platform=osx
 # Productivity
 https://ardownload3.adobe.com/pub/adobe/acrobat/mac/AcrobatDC/2500121288/AcroRdrSCADC2500121288_MUI.dmg
 https://go.microsoft.com/fwlink/?linkid=2192091 # MS Edge
+https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=id
 
 # AI
 meta: https://downloads.claude.ai/releases/darwin/universal/RELEASES.json [version: '.currentRelease'] [url: '.releases[] | select(.version == "{version}") | .updateTo.url | sub("\.zip$"; ".dmg")'] # Claude

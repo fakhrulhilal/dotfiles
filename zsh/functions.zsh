@@ -75,7 +75,7 @@ install_dmg() {
   local app pkg
   local dmg_path="$1"
   local mount_point
-  mount_point=$(hdiutil attach "$dmg_path" | grep '/Volumes/' | sed 's|.*\(/Volumes/.*\)|\1|')
+  mount_point=$(diskutil image attach "$dmg_path" | grep '/Volumes/' | sed 's|.*\(/Volumes/.*\)|\1|')
 
   # Handle .app inside dmg
   app=$(find "$mount_point" -name "*.app" -maxdepth 1 | head -1)
@@ -93,7 +93,7 @@ install_dmg() {
     echo "❌ No .app or .pkg found in $(_extract_filename "$url"), skipping"
   fi
 
-  hdiutil detach "$mount_point"
+  diskutil eject "$mount_point"
   rm "$dmg_path"
 }
 
