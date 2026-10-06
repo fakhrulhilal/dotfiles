@@ -23,10 +23,11 @@ services:
 
   message-broker-kafka-keeper:
     image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
+    platform: linux/amd64
     container_name: message-broker.kafka-keeper
     labels:
       - dev.orbstack.domains=keeper.kafka.message-broker.${DOMAIN}
-      - dev.orbstack.icon="https://zookeeper.apache.org/images/zookeeper_small.gif"
+      - dev.orbstack.icon=https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Apache_ZooKeeper_logo.svg/330px-Apache_ZooKeeper_logo.svg.png
     ports:
       - "2181:2181"
     healthcheck:
@@ -43,13 +44,14 @@ services:
 
   message-broker-kafka-broker:
     image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    platform: linux/amd64
     container_name: message-broker.kafka-broker
     depends_on:
       message-broker-kafka-keeper:
         condition: service_healthy
     labels:
       - dev.orbstack.domains=kafka.message-broker.${DOMAIN}
-      - dev.orbstack.icon="https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Apache_Kafka_logo.svg/154px-Apache_Kafka_logo.svg.png"
+      - dev.orbstack.icon=https://raw.githubusercontent.com/apache/kafka-site/asf-site/logos/kafka_logo--simple.png
     ports:
       - "9092:9092"
     volumes:
@@ -57,7 +59,7 @@ services:
     restart: unless-stopped
     profiles: [ message-broker, kafka ]
     healthcheck:
-      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092" ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -65,15 +67,18 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "message-broker.kafka-keeper:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${HOST_ADDR:-localhost}:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # INTERNAL: container-to-container (29092). EXTERNAL: apps on the host (9092)
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://message-broker.kafka-broker:29092,EXTERNAL://${HOST_ADDR:-kafka.message-broker.${DOMAIN}}:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
   message-broker-schema-registry:
     image: confluentinc/cp-schema-registry:${KAFKA_VERSION}
+    platform: linux/amd64
     container_name: message-broker.schema-registry
     depends_on:
       message-broker-kafka-keeper:
@@ -83,7 +88,7 @@ services:
     labels:
       - dev.orbstack.domains=schema-registry.message-broker.${DOMAIN}
       - dev.orbstack.http-port=8080
-      - dev.orbstack.icon="https://docs.confluent.io/_static/favicon.ico"
+      - dev.orbstack.icon=https://docs.confluent.io/_static/favicon.ico
     restart: unless-stopped
     profiles: [ message-broker, kafka ]
     healthcheck:
@@ -94,8 +99,7 @@ services:
       start_period: 15s
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: "message-broker.kafka-keeper:2181"
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "message-broker.kafka-broker:9092"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://message-broker.kafka-broker:29092"
       SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8080"
 
   message-broker-redpanda-broker:
@@ -106,6 +110,7 @@ services:
     labels:
       - dev.orbstack.domains=redpanda.message-broker.${DOMAIN}
       - dev.orbstack.http-port=8081
+      - dev.orbstack.icon=https://cdn.prod.website-files.com/68ed36e99e31581dedf5dc7c/68fbe910c263282ff5f65171_webclip.png
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health | grep -q 'Healthy:\\s*true'" ]
       interval: 5s
@@ -149,11 +154,11 @@ services:
     restart: unless-stopped
     profiles: [ message-broker, redpanda ]
     labels:
-      - dev.orbstack.domains=console.redpanda.message-broker.${DOMAIN}
+      - dev.orbstack.domains=console.message-broker.${DOMAIN}
       - dev.orbstack.http-port=8080
-      - dev.orbstack.icon="https://cdn.prod.website-files.com/6632a83042773c5a1a5f4443/6759c95943024c2952bcec9e_redpanda-logomark-favicon256x256.png"
+      - dev.orbstack.icon=https://cdn.prod.website-files.com/68ed36e99e31581dedf5dc7c/68fbe910c263282ff5f65171_webclip.png
     depends_on:
-      message-broker-redpanda-broker:
+      message-broker-schema-registry:
         condition: service_healthy
     entrypoint: /bin/sh
     command:
@@ -161,10 +166,10 @@ services:
       - |
         cat <<EOF > /tmp/config.yml
         kafka:
-          brokers: [ "message-broker.kafka-broker:9092" ]
-          schemaRegistry:
-            enabled: true
-            urls: [ "http://message-broker.schema-registry:8080" ]
+          brokers: [ "message-broker.kafka-broker:29092" ]
+        schemaRegistry:
+          enabled: true
+          urls: [ "http://message-broker.schema-registry:8080" ]
         EOF
 
         if [ "$$TARGET" = "redpanda" ]; then
@@ -178,13 +183,13 @@ services:
 
         exec /app/console
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/admin/health | grep -q ok" ]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/admin/health | grep -q '\"isHttpOk\":true'" ]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
     environment:
-      TARGET: redpanda
+      TARGET: kafka
       CONFIG_FILEPATH: /tmp/config.yml
 
 volumes:
