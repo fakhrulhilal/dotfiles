@@ -1,6 +1,7 @@
 services:
   db-mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
     container_name: db.mssql
     labels:
       - dev.orbstack.domains=mssql.db.${DOMAIN}

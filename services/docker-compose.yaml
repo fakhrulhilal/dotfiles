@@ -6,7 +6,7 @@ include:
   - cache.compose.yaml
   - mail.compose.yaml
   - pkg.compose.yaml
-  - message-broker.compose.yaml
+  - broker.compose.yaml
   - workflow.compose.yaml
   - otlp.compose.yaml
   #- path: lab/lab.compose.yaml
