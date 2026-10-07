@@ -4,7 +4,7 @@ services:
     container_name: otlp.seq
     labels:
       - dev.orbstack.domains=seq.otlp.${DOMAIN}
-      - dev.orbstack.icon="https://datalust.co/favicon.png"
+      - dev.orbstack.icon=https://datalust.co/favicon.png
     ports:
       - "8041:80"
       - "5341:5341"
@@ -31,7 +31,7 @@ services:
     container_name: otlp.aspire
     labels:
       - dev.orbstack.domains=aspire.otlp.${DOMAIN}
-      - dev.orbstack.icon="https://aspiredashboard.com/assets/img/logos.png"
+      - dev.orbstack.icon=https://aspiredashboard.com/assets/img/logos.png
     # chiseled image without shell or curl, so no healthcheck can run inside it
     restart: unless-stopped
     profiles: [ otlp ]
@@ -156,6 +156,7 @@ services:
     container_name: otlp.quickwit
     labels:
       dev.orbstack.domains: quicktwit.otlp.${DOMAIN}
+      dev.orbstack.icon: https://quickwit.io/favicons/apple-touch-icon.png
     restart: unless-stopped
     profiles: [ otlp ]
     command: [ "run" ]
@@ -189,7 +190,7 @@ services:
       retries: 5
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://rootprint:rootprint@db-postgre:5432/rootprint # URL-embedded, so avoid APP_PASSWORD special chars
+      DATABASE_URL: postgres://rootprint:rootprint@db-postgres:5432/rootprint # URL-embedded, so avoid APP_PASSWORD special chars
       QUICKWIT_URL: http://otlp-quickwit:7280
       ORIGIN: https://rootprint.otlp.${DOMAIN}
 
@@ -216,7 +217,7 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: otlp.collector
     labels:
-      dev.orbstack.domains: collector.otlp.${DOMAIN}
+      dev.orbstack.domains: collector.otlp.${DOMAIN},otlp.${DOMAIN}
       dev.orbstack.http-port: 4318
     depends_on:
       #grafana:
@@ -235,6 +236,11 @@ services:
     ports:
       - "4317:4317"   # OTLP gRPC receiver
       - "4318:4318"   # OTLP HTTP receiver
+    networks:
+      default:
+        aliases:
+          - otlp
+          - otel
 
 volumes:
   seq_data:

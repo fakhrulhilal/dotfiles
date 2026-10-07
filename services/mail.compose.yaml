@@ -18,6 +18,4 @@ services:
     restart: unless-stopped
     profiles: [ mail ]
     environment:
-      SERVEROPTIONS__URLS: "https://*:443;http://*:80"
-      ASPNETCORE_Kestrel__Certificates__Default__Path: "/certs/dev.lab.pfx"
-      ASPNETCORE_Kestrel__Certificates__Default__Password: "${CERT_PASSWORD}"
+      SERVEROPTIONS__URLS: "http://*:80"

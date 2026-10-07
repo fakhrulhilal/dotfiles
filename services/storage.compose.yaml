@@ -71,7 +71,7 @@ services:
     image: rustfs/rustfs:latest
     container_name: storage.rustfs
     labels:
-      - dev.orbstack.domains=rustfs.storage.${DOMAIN}
+      - dev.orbstack.domains=rustfs.storage.${DOMAIN},s3.storage.${DOMAIN}
       - dev.orbstack.http-port=9001
     volumes:
       - rustfs_data:/data
@@ -94,6 +94,10 @@ services:
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_CONSOLE_ENABLE: true
       RUSTFS_CONSOLE_ADDRESS: ":9001"
+    networks:
+      default:
+        aliases:
+          - storage-s3
 
 volumes:
   azurite_data:
