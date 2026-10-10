@@ -1,0 +1,7 @@
+/target
+/data
+/config.yaml
+*.db
+*.db-wal
+*.db-shm
+.env

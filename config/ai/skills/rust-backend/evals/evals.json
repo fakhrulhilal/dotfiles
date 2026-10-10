@@ -1,0 +1,79 @@
+{
+  "skill_name": "rust-backend",
+  "evals": [
+    {
+      "id": 1,
+      "name": "new-bookmarks-service",
+      "files": [],
+      "prompt": "I need a backend for a small link-sharing tool we use at work. Start a new cargo project called `bookmarks-api`, Rust with axum. A bookmark has a url, a title and an optional note. Endpoints: list (newest first, with an optional ?q= that matches part of the title), get one, create, update, delete. It has to run on our Postgres in production, but I want to be able to run it on my laptop without setting anything up. Make sure it builds and has tests that pass.",
+      "expected_output": "A cargo project with a bookmarks resource under /api/v1, OpenAPI + Swagger UI, problem+json errors, live/ready probes, PostgreSQL and Turso stores selected by URL, migrations for both, end-to-end tests passing.",
+      "assertions": [
+        "cargo test passes",
+        "cargo clippy --all-targets reports no warnings",
+        "Unknown path returns 404 with content type application/problem+json",
+        "Wrong HTTP method on an existing path returns 405 with content type application/problem+json",
+        "Malformed JSON body returns a 4xx with content type application/problem+json",
+        "A malformed id in the path returns 400 with content type application/problem+json",
+        "GET /health/live and GET /health/ready return 200 with the plain-text body Healthy, and ?format=json returns status and results",
+        "An OpenAPI JSON document is served and Swagger UI is browsable",
+        "Bookmark routes are under /api/v1/bookmarks and appear in the OpenAPI document",
+        "Create returns 201; a create with an empty title or url returns 422 with an errors object mapping each member name to its messages",
+        "List is newest first and ?q= filters by part of the title",
+        "Both a PostgreSQL store (sqlx) and an embedded Turso store exist behind one trait, selected by the database URL",
+        "Migrations exist for both backends",
+        "The server starts with no setup (embedded database) using the command in RUN.md",
+        "No todo code is left over from the template"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "add-projects-resource",
+      "files": [
+        "assets/template"
+      ],
+      "prompt": "This is our todo API (in ./todo-api). Add projects to it: a project has a name, and a todo can optionally belong to one project. I want CRUD for projects, to be able to set or clear the project of a todo, and to list todos by ?project_id=. Deleting a project that still has todos must be refused with a clear error. Keep the API docs and the tests up to date.",
+      "expected_output": "Projects resource added across domain, both migration sets, both stores, handlers with utoipa annotations, a 409 problem for deleting a project in use, tests extended and passing.",
+      "assertions": [
+        "cargo test passes",
+        "cargo clippy --all-targets reports no warnings",
+        "Unknown path returns 404 with content type application/problem+json",
+        "Wrong HTTP method on an existing path returns 405 with content type application/problem+json",
+        "Malformed JSON body returns a 4xx with content type application/problem+json",
+        "A malformed id in the path returns 400 with content type application/problem+json",
+        "GET /health/live and GET /health/ready return 200 with the plain-text body Healthy, and ?format=json returns status and results",
+        "An OpenAPI JSON document is served and Swagger UI is browsable",
+        "Project CRUD routes exist under /api/v1/projects and appear in the OpenAPI document",
+        "A todo's project can be set and cleared, and GET /api/v1/todos?project_id= filters",
+        "Deleting a project that still has todos is refused with 409 problem+json; deleting an empty one returns 204",
+        "Setting a todo's project to an id that does not exist is rejected with a 4xx problem (not a 500)",
+        "New numbered migration files were added for both backends and the existing 0001 files are unchanged",
+        "Both stores (PostgreSQL and Turso) implement the new operations",
+        "The tests cover projects (lifecycle and the refused delete)"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "retrofit-notes-service",
+      "files": [
+        "evals/files/notes-service"
+      ],
+      "prompt": "Our ops team says this service (./notes-service) keeps getting restarted by Kubernetes at the wrong moments because it has no probes, and the mobile developers complain that errors come back as random bits of text they can't parse. Can you fix both, and give the mobile team API docs they can browse? Please don't change the existing routes or how the data is stored.",
+      "expected_output": "Existing /notes routes unchanged; all errors (including unknown path, wrong method, malformed JSON, bad id) are problem+json; /health/live and /health/ready; OpenAPI document and Swagger UI; builds and has passing tests.",
+      "assertions": [
+        "cargo test passes",
+        "cargo clippy --all-targets reports no warnings",
+        "Unknown path returns 404 with content type application/problem+json",
+        "Wrong HTTP method on an existing path returns 405 with content type application/problem+json",
+        "Malformed JSON body returns a 4xx with content type application/problem+json",
+        "A malformed id in the path returns 400 with content type application/problem+json",
+        "GET /health/live and GET /health/ready return 200 with the plain-text body Healthy, and ?format=json returns status and results",
+        "An OpenAPI JSON document is served and Swagger UI is browsable",
+        "The existing routes still work as before: POST /notes 201, GET /notes, GET/PUT/DELETE /notes/{id}",
+        "Not-found and validation errors from the notes handlers are application/problem+json",
+        "The notes routes and both health probes appear in the OpenAPI document",
+        "Storage is still the in-memory map (no database was added)",
+        "The project has automated tests"
+      ]
+    }
+  ]
+}

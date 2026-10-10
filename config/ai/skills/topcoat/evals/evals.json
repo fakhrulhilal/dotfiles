@@ -1,0 +1,61 @@
+{
+  "skill_name": "topcoat",
+  "evals": [
+    {
+      "id": 1,
+      "name": "blog-routing",
+      "prompt": "I'm trying out Topcoat (the Rust web framework from tokio-rs). Build me a small blog app in a new cargo project called `blog`: a home page, /posts listing posts with a ?page= query parameter (5 per page), /posts/{id} showing one post and returning a proper 404 when the id doesn't exist, and a form on the post page that POSTs a comment and then redirects back to the post. One shared layout with a nav bar that highlights the current section. Keep data in memory, no database. Make sure it compiles.",
+      "expected_output": "A cargo project using module routing, module_param!/path_param, #[query_params], href! links, Form + see_other, ok_or_not_found, a #[layout]; cargo check passes.",
+      "files": [],
+      "assertions": [
+        "cargo check passes on the final project",
+        "Routes come from module routing (module_router!) with modules for posts and the post id",
+        "The post id is a typed path parameter (module_param!/path_param!) read with path_param",
+        "The ?page= value is read through #[query_params]",
+        "A missing post returns 404 through a router error (ok_or_not_found or not_found), not a 200 page",
+        "The comment handler is a POST route using Form and ends with a 303 see_other redirect",
+        "Internal links and the form action use href!, with no hand-written internal path strings",
+        "The nav highlights the current section using is_current (or an equivalent request-path check) in a #[layout]"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "live-search-runtime",
+      "prompt": "Using Topcoat, make a new cargo project `catalog` with a product search page: typing in a search box updates the result list from the server without reloading the page, and each result has a 'favorite' button that calls the server and flips to 'Favorited' in place. Only signed-in users may favorite (fake the sign-in with a cookie named `user`, that's fine for now). Products can be a hardcoded list. Make sure it compiles.",
+      "expected_output": "A cargo project using signal, $(...) expressions, a #[shard] for results, a #[procedure] for favoriting that authorizes inside the procedure and validates input, keyed loop, router with .discover()/.assets()/.cookies()/.runtime(); cargo check passes.",
+      "files": [],
+      "assertions": [
+        "cargo check passes on the final project",
+        "The search box writes to a signal and the results are a #[shard] fed by a runtime expression",
+        "Favoriting is a #[procedure] called from an @click handler",
+        "The procedure checks the `user` cookie itself (authorization inside the procedure)",
+        "The procedure validates the product id it receives from the browser",
+        "The result loop is keyed (#[key]) or items carry stable ids",
+        "The router enables discover, assets, cookies and runtime, and the document includes the runtime script",
+        "The button flips to 'Favorited' in place via a signal or shard re-render, with no full page reload"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "review-flawed-code",
+      "prompt": "Can you review this Topcoat page before I merge it? It's src/app/dashboard.rs in our invoicing app. Tell me what's wrong and show the fixed file.",
+      "expected_output": "A review that finds the security and correctness problems (unprotected shard/procedure, leaked api_token, hand-written URLs, disabled=\"false\", aria-expanded bool, missing #[key], <br></br>, dynamic Tailwind class via format!, unvalidated client input) plus a corrected file.",
+      "files": [
+        "evals/files/dashboard.rs"
+      ],
+      "assertions": [
+        "Flags that the shard is not protected by the layer and must authorize itself",
+        "Flags that the mark_paid procedure lacks authorization and ownership checks",
+        "Flags that api_token is captured by a runtime expression and sent to the browser",
+        "Flags hand-written internal URLs and replaces them with href!",
+        "Flags that disabled=\"false\" still disables the button",
+        "Flags that aria-expanded needs \"true\"/\"false\" strings, not a bool",
+        "Flags the missing #[key] on the loop of stateful components",
+        "Flags <br></br> as invalid for a void element",
+        "Flags the format!-built class and uses class! instead",
+        "Flags that `account` and `filter` arrive from the browser and must not be trusted",
+        "The fixed dashboard.rs applies the security fixes (auth in shard and procedure, no token capture)"
+      ]
+    }
+  ]
+}
