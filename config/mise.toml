@@ -89,6 +89,9 @@ fzf = "latest"
         '''
 }
 "cargo:oha" = "latest" # alternative for ark, web benchmark tool
+"cargo:difftastic" = "latest" # similar to delta, a diff with treesitter support
+"cargo:git-cliff" = "latest" # git changelog generator
+"cargo:ouch" = "latest" # alternative to tar, compression toolkit
 
 # software development
 neovim = "latest"
