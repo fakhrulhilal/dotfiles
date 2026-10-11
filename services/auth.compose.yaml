@@ -1,0 +1,178 @@
+services:
+  # Rauthy only takes the SMTP root CA as PEM text inside its config, so the template gets the lab root CA appended
+  auth-rauthy-setup:
+    image: alpine/openssl
+    container_name: auth.rauthy.setup
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        { cat /template/config.toml; printf 'root_ca = """\n'; cat /certs/root-CA.crt; printf '"""\n'; } > /config/config.toml
+    depends_on:
+      tool-cert:
+        condition: service_completed_successfully
+    configs:
+      - source: rauthy_template
+        target: /template/config.toml
+    volumes:
+      - certificate:/certs:ro
+      - rauthy_config:/config
+    profiles: [ auth ]
+    restart: no
+
+  auth-rauthy:
+    image: ghcr.io/sebadob/rauthy:0.37.1
+    container_name: auth.rauthy
+    labels:
+      - dev.orbstack.domains=rauthy.auth.${DOMAIN}
+      - dev.orbstack.http-port=8080
+      - dev.orbstack.icon=https://sebadob.github.io/rauthy/rauthy_grey_small.png
+    depends_on:
+      tool-tiny-hc:
+        condition: service_completed_successfully
+      auth-rauthy-setup:
+        condition: service_completed_successfully
+      # Rauthy exits when it cannot reach its SMTP server
+      mail-mailcrab:
+        condition: service_healthy
+    command: [ "serve", "-c", "/app/config/config.toml" ]
+    volumes:
+      - rauthy_data:/app/data
+      - rauthy_config:/app/config:ro
+      - tiny-hc_bin:/hc:ro
+    healthcheck:
+      # image is distroless: no shell, wget or curl
+      test: [ "CMD", "/hc/tiny-hc", "http://127.0.0.1:8080/auth/v1/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    profiles: [ auth ]
+    environment:
+      TZ: ${TZ}
+      # only read while the database is still empty; remove the rauthy_data volume to bootstrap again
+      BOOTSTRAP_ADMIN_EMAIL: ${APP_EMAIL:-$APP_USERNAME@$DOMAIN}
+      BOOTSTRAP_ADMIN_PASSWORD_PLAIN: ${APP_PASSWORD}
+
+  auth-casdoor:
+    image: casbin/casdoor:latest
+    container_name: auth.casdoor
+    labels:
+      - dev.orbstack.domains=casdoor.auth.${DOMAIN}
+      - dev.orbstack.http-port=8000
+      - dev.orbstack.icon=https://casdoor.ai/img/casdoor.png
+    depends_on:
+      db-postgres-init:
+        condition: service_completed_successfully
+      tool-cert:
+        condition: service_completed_successfully
+      mail-mailcrab:
+        condition: service_healthy
+        required: false
+    configs:
+      - source: casdoor_init
+        target: /init_data.yaml
+    volumes:
+      - certificate:/certs:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs http://localhost:8000/api/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    profiles: [ auth ]
+    environment:
+      TZ: ${TZ}
+      # trust the lab root CA, MailCrab serves the certificate issued by it
+      SSL_CERT_FILE: /certs/ca-bundle.crt
+      # every key of conf/app.conf can be overridden by an environment variable of the same name
+      httpport: 8000
+      driverName: postgres
+      dataSourceName: "user=casdoor password=casdoor host=db-postgres port=5432 sslmode=disable dbname=casdoor"
+      dbName: casdoor
+      # must match the browser URL, WebAuthn (passkey) credentials are bound to it
+      origin: "https://casdoor.auth.${DOMAIN}"
+      # password of the default built-in/admin, only applied when that user is created
+      initAdminPassword: ${APP_PASSWORD}
+      initDataFile: /init_data.yaml
+      # existing objects only get the fields set in the init data, so what is changed in the dashboard is kept
+      initDataMerge: true
+
+configs:
+  rauthy_template:
+    content: |
+      [cluster]
+      node_id = 1
+      nodes = ["1 localhost:8100 localhost:8200"]
+      secret_raft = "469fe6c6166e0c7d2aff291290b181d1"
+      secret_api = "723b2f72a7b50096236f03a98169d90e"
+
+      [encryption]
+      keys = ['e802e58b/zzwbjygU5kNRt/Pbz95iyTrhySqK7mOA0lRK+vLoT40=']
+      key_active = 'e802e58b'
+
+      [mfa]
+      # allow the bootstrapped admin into the admin UI with password only
+      admin_force_mfa = false
+
+      [server]
+      # TLS is terminated by the OrbStack proxy
+      scheme = 'http'
+      port_http = 8080
+      pub_url = 'rauthy.auth.${DOMAIN}'
+      proxy_mode = true
+      trusted_proxies = ['127.0.0.1/32', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '198.18.0.0/15']
+
+      [webauthn]
+      rp_id = 'rauthy.auth.${DOMAIN}'
+      rp_origin = 'https://rauthy.auth.${DOMAIN}:443'
+
+      # keep this section last: auth-rauthy-setup appends root_ca to it
+      [email]
+      rauthy_admin_email = '${APP_EMAIL:-$APP_USERNAME@$DOMAIN}'
+      # MailCrab: implicit TLS, any username/password is accepted
+      smtp_url = 'mail.${DOMAIN}'
+      smtp_port = 25
+      smtp_username = 'rauthy'
+      smtp_password = 'rauthy'
+      smtp_from = 'Rauthy <noreply@${DOMAIN}>'
+      smtp_tls_mode = 'tls'
+
+  # APP_PASSWORD lands in a double-quoted YAML string, so avoid " and \ in it
+  casdoor_init:
+    content: |
+      organizations:
+        # users can only be added to built-in (the global administrators) with this consent
+        - owner: admin
+          name: built-in
+          hasPrivilegeConsent: true
+      users:
+        - owner: built-in
+          name: "${APP_USERNAME}"
+          type: normal-user
+          password: "${APP_PASSWORD}"
+          displayName: "${APP_USERNAME}"
+          email: "${APP_EMAIL:-$APP_USERNAME@$DOMAIN}"
+          isAdmin: true
+          signupApplication: app-built-in
+      providers:
+        - owner: admin
+          name: provider_email_mailcrab
+          displayName: MailCrab
+          category: Email
+          type: Default
+          # MailCrab: implicit TLS, any username/password is accepted
+          host: "mailcrab.mail.${DOMAIN}"
+          port: 25
+          sslMode: Enable
+          # the username is also used as the sender address
+          clientId: "noreply@${DOMAIN}"
+          clientSecret: casdoor
+          receiver: "${APP_EMAIL:-$APP_USERNAME@$DOMAIN}"
+          title: Casdoor Verification Code
+          content: "You have requested a verification code at Casdoor. Here is your code: %s, please enter in 5 minutes."
+
+volumes:
+  rauthy_data:
+  rauthy_config:

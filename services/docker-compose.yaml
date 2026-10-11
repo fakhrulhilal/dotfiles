@@ -11,6 +11,22 @@ services:
     volumes:
       - tiny-hc_bin:/bin
 
+  # self-signed chain (root CA -> intermediate CA -> wildcard certificates) shared through the certificate volume;
+  # files are only created when missing. Import root-CA.crt and server-CA.crt into the host to trust it.
+  tool-cert:
+    image: alpine/openssl
+    container_name: tool.cert
+    restart: no
+    entrypoint: [ "sh", "/init/generate.sh" ]
+    volumes:
+      - ./init/cert:/init:ro
+      - certificate:/certs
+    environment:
+      BASE_DOMAIN: ${DOMAIN}
+      # one per <category>.compose.yaml: each gets <category>.${DOMAIN} and *.<category>.${DOMAIN}
+      DOMAIN: auth,broker,cache,db,mail,pkg,otlp,storage,workflow
+      CERT_PASSWORD: ${CERT_PASSWORD:-$APP_PASSWORD}
+
 include:
   - db.compose.yaml
   - storage.compose.yaml
@@ -20,11 +36,13 @@ include:
   - broker.compose.yaml
   - workflow.compose.yaml
   - otlp.compose.yaml
+  - auth.compose.yaml
   #- path: lab/lab.compose.yaml
   #  project_directory: .
 
 volumes:
   tiny-hc_bin:
+  certificate:
 
 secrets:
   app_password:

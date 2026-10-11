@@ -1,0 +1,42 @@
+# Trimmed from https://gist.github.com/fakhrulhilal/70c80aa5331a92e0138f7c280b43fe11
+# SAN and ASPNET_CERT_VERSION are read from the environment, generate.sh always sets them.
+
+[ req ]
+default_bits            = 2048
+distinguished_name      = req_distinguished_name
+string_mask             = utf8only
+
+[ req_distinguished_name ]
+
+#######################################################################
+# Signing cert: certificate for non CA
+#######################################################################
+[ web_cert ]
+basicConstraints        = critical, CA:FALSE
+keyUsage                = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage        = serverAuth, clientAuth
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always, issuer:always
+subjectAltName          = $ENV::SAN
+# Special certificate for ASP.NET development: Kestrel and `dotnet dev-certs` take the first raw byte of this
+# extension as the certificate version, so it is written as a bare byte (DER:) instead of an ASN.1 INTEGER
+1.3.6.1.4.1.311.84.1.1  = DER:$ENV::ASPNET_CERT_VERSION
+
+#######################################################################
+# Signing cert: certificate for intermedia CA
+#######################################################################
+[ ica_cert ]
+basicConstraints        = critical, CA:TRUE, pathlen:0
+keyUsage                = cRLSign, keyCertSign, digitalSignature
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always, issuer:always
+
+#######################################################################
+# Signing cert: self signed for CA's cert
+#######################################################################
+[ ca_cert ]
+basicConstraints        = critical, CA:TRUE
+keyUsage                = cRLSign, keyCertSign, digitalSignature
+extendedKeyUsage        = critical, serverAuth, clientAuth, codeSigning, emailProtection, timeStamping
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always, issuer:always

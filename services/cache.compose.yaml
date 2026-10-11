@@ -3,10 +3,10 @@ services:
     image: redis:7-alpine
     container_name: cache.redis
     labels:
-      - dev.orbstack.domains=redis.cache.${DOMAIN}
+      - dev.orbstack.domains=redis.cache.${DOMAIN},cache.${DOMAIN}
       - dev.orbstack.icon="https://redis.io/apple-icon.png"
-    ports:
-      - "6379:6379"
+    #ports:
+    #  - "6379:6379"
     restart: unless-stopped
     profiles: [ cache ]
     healthcheck:
@@ -14,3 +14,60 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  cache-valkey:
+    image: valkey/valkey:9.1.2-alpine3.24
+    container_name: cache.valkey
+    labels:
+      - dev.orbstack.domains=valkey.cache.${DOMAIN}
+      - dev.orbstack.icon=https://valkey.io/img/favicon/apple-touch-icon.png
+    #ports:
+    #  - "6379:6379"
+    restart: unless-stopped
+    profiles: [ cache ]
+    healthcheck:
+      test: [ "CMD-SHELL", "[ \"$$(valkey-cli -h localhost ping)\" = 'PONG' ]" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # no built-in authentication: reachable through the OrbStack domain only, so no port is published.
+  # Connections live in the browser, so connections.js seeds this stack's servers and is added to index.html at start up.
+  cache-console:
+    image: valkey/valkey-admin:1.2.0
+    container_name: cache.console
+    labels:
+      - dev.orbstack.domains=console.cache.${DOMAIN}
+      - dev.orbstack.http-port=8080
+      - dev.orbstack.icon=https://valkey.io/img/favicon/apple-touch-icon.png
+    restart: unless-stopped
+    depends_on:
+      tool-tiny-hc:
+        condition: service_completed_successfully
+      cache-valkey:
+        condition: service_healthy
+        required: false
+      cache-redis:
+        condition: service_healthy
+        required: false
+    volumes:
+      - tiny-hc_bin:/hc:ro
+      - ./init/valkey-admin/connections.js:/app/apps/frontend/dist/assets/connections.js:ro
+    profiles: [ cache ]
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - >-
+        grep -q connections.js apps/frontend/dist/index.html
+        || sed -i 's|<script |<script src="./assets/connections.js"></script><script |' apps/frontend/dist/index.html;
+        exec docker-entrypoint.sh node apps/server/dist/index.js
+    healthcheck:
+      test: [ "CMD", "/hc/tiny-hc", "http://127.0.0.1:8080/" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    environment:
+      TZ: ${TZ}
+      DEPLOYMENT_MODE: Web
+      VALKEY_HOST: cache-valkey
+      VALKEY_PORT: 6379

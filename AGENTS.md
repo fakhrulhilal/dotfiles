@@ -307,6 +307,10 @@ browser-console snippets, not Node modules.
     - Dependents wait with `condition: service_healthy`, not `service_started`.
   - Service `<category>-<name>`, container `<category>.<name>`, volume `<name>_<volume>`.
   - HTTP services expose their port through the `dev.orbstack.http-port` label next to `dev.orbstack.domains`.
+  - TLS certificates come from the `certificate` volume, filled once by `tool-cert` (`init/cert/generate.sh`): root CA,
+    intermediate CA, and a certificate (`.crt`, `.key`, `.pem` chain, `.pfx`) for `${DOMAIN}` and for each category
+    (`mail.${DOMAIN}` plus `*.mail.${DOMAIN}`). Add a new category to `DOMAIN` of `tool-cert`. Services mount the
+    volume read-only at `/certs` and depend on `tool-cert` with `service_completed_successfully`.
   - Run with e.g. `docker compose --profile db up -d`.
 - `powershell/`: `_profile.ps1` dot-sources every `*.ps1` in that folder. `Modules/PorkBunClient` is a standard module
   with `Public/`, `Private/` and a PSScriptAnalyzer settings file.

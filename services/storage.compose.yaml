@@ -73,6 +73,7 @@ services:
     labels:
       - dev.orbstack.domains=rustfs.storage.${DOMAIN},s3.storage.${DOMAIN}
       - dev.orbstack.http-port=9001
+      - dev.orbstack.icon=https://rustfs.com/apple-touch-icon.png
     volumes:
       - rustfs_data:/data
       - rustfs_logs:/logs

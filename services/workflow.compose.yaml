@@ -42,12 +42,15 @@ services:
       - dev.orbstack.http-port=8080
     volumes:
       - noco_data:/usr/app/data
+      - certificate:/certs:ro
     depends_on:
       db-postgres-init:
         condition: service_completed_successfully
+      tool-cert:
+        condition: service_completed_successfully
       cache-redis:
         condition: service_healthy
-      mail-smtp4dev:
+      mail-mailcrab:
         condition: service_healthy
         required: false
     healthcheck:
@@ -65,12 +68,15 @@ services:
       NC_ADMIN_EMAIL: ${APP_EMAIL:-$APP_USERNAME@$DOMAIN}
       NC_ADMIN_PASSWORD: ${APP_PASSWORD}
       NC_SMTP_FROM: "noreply@${DOMAIN}"
-      NC_SMTP_HOST: ${SMTP_HOST:-mail.smtp4dev}
+      # MailCrab: implicit TLS, any username/password is accepted
+      NC_SMTP_HOST: ${SMTP_HOST:-mail.$DOMAIN}
       NC_SMTP_PORT: ${SMTP_PORT:-25}
-      NC_SMTP_USERNAME: ${SMTP_USERNAME:-}
-      NC_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      NC_SMTP_USERNAME: ${SMTP_USERNAME:-noco}
+      NC_SMTP_PASSWORD: ${SMTP_PASSWORD:-noco}
       NC_SMTP_SECURE: true
       NC_REDIS_URL: "redis://cache-redis:6379/1"
+      # trust the lab root CA, MailCrab serves the certificate issued by it
+      NODE_EXTRA_CA_CERTS: /certs/root-CA.crt
 
 volumes:
   n8n_data:

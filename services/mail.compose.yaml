@@ -1,12 +1,51 @@
 services:
+  mail-mailcrab:
+    image: marlonb/mailcrab:latest
+    container_name: mail.mailcrab
+    labels:
+      - dev.orbstack.domains=mailcrab.mail.${DOMAIN},mail.${DOMAIN}
+      - dev.orbstack.http-port=1080
+      - dev.orbstack.icon=https://raw.githubusercontent.com/tweedegolf/mailcrab/refs/heads/main/frontend/img/mailcrab.svg
+    networks:
+      default:
+        # the name on the mail certificate, for containers that verify the server certificate
+        aliases: [ "mail.${DOMAIN}" ]
+    depends_on:
+      tool-cert:
+        condition: service_completed_successfully
+    volumes:
+      - type: volume
+        source: certificate
+        target: /app/cert.pem
+        read_only: true
+        volume:
+          subpath: mail.${DOMAIN}.pem
+      - type: volume
+        source: certificate
+        target: /app/key.pem
+        read_only: true
+        volume:
+          subpath: mail.${DOMAIN}.key
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:1080/" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    profiles: [ mail ]
+    environment:
+      SMTP_PORT: 25
+      # implicit TLS (smtps, no STARTTLS) with the certificate above; clients must log in, any username/password works
+      ENABLE_TLS_AUTH: true
+
   mail-smtp4dev:
     image: rnwood/smtp4dev
     container_name: mail.smtp4dev
     labels:
       - dev.orbstack.domains=smtp4dev.mail.${DOMAIN}
       - dev.orbstack.http-port=80
-    ports:
-      - "25:25"
+      - dev.orbstack.icon=https://raw.githubusercontent.com/rnwood/smtp4dev/master/Rnwood.Smtp4dev/ClientApp/public/logo.png
     volumes:
       - ${CERT_DIR}:/certs
     healthcheck:
