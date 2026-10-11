@@ -20,6 +20,10 @@ extensions:
   bearertokenauth/rootprint:
     filename: /rootprint/ingest.token
 
+  # probed by the collector's own healthcheck (tiny-hc)
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 exporters:
 
   otlphttp/seq:
@@ -45,7 +49,7 @@ exporters:
       authenticator: bearertokenauth/rootprint
 
 service:
-  extensions: [ bearertokenauth/rootprint ]
+  extensions: [ bearertokenauth/rootprint, health_check ]
   pipelines:
     traces:
       receivers: [otlp]

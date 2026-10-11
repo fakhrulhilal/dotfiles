@@ -32,14 +32,28 @@ services:
     labels:
       - dev.orbstack.domains=aspire.otlp.${DOMAIN}
       - dev.orbstack.icon=https://aspiredashboard.com/assets/img/logos.png
-    # chiseled image without shell or curl, so no healthcheck can run inside it
     restart: unless-stopped
+    depends_on:
+      tool-tiny-hc:
+        condition: service_completed_successfully
+    volumes:
+      - aspire_data:/data
+      - tiny-hc_bin:/hc:ro
     profiles: [ otlp ]
+    user: root
+    healthcheck:
+      test: [ "CMD", "/hc/tiny-hc", "--expect-response", "healthy", "http://127.0.0.1:80/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     environment:
       ASPNETCORE_URLS: "http://*:80"
       Dashboard__ApplicationName: "iroel.xyz Lab"
       ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL: "http://*:4317"
       ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL: "http://*:4318"
+      ASPIRE_DASHBOARD_PERSISTENCE_MODE: "resume"
+      ASPIRE_DASHBOARD_DATA_DIRECTORY: "/data"
       DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: true
       Dashboard__TelemetryLimits__MaxLogCount: 1000
       Dashboard__TelemetryLimits__MaxTraceCount: 1000
@@ -56,6 +70,12 @@ services:
     volumes:
       - grafana_data:/data
     profiles: [ otlp ]
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs http://localhost:3000/api/health | grep -q '\"database\": *\"ok\"'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   otlp-elastic-search:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELK_VERSION}
@@ -223,16 +243,25 @@ services:
       #grafana:
       #  condition: service_started
       otlp-aspire:
-        condition: service_started
+        condition: service_healthy
       otlp-seq:
         condition: service_healthy
       otlp-rootprint-init:
+        condition: service_completed_successfully
+      tool-tiny-hc:
         condition: service_completed_successfully
     command: ["--config=/app/config.yaml"]
     volumes:
       - ./otlp.yml:/app/config.yaml:ro
       - rootprint_secrets:/rootprint:ro
+      - tiny-hc_bin:/hc:ro
     profiles: [ otlp ]
+    healthcheck:
+      test: [ "CMD", "/hc/tiny-hc", "http://127.0.0.1:13133/" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     ports:
       - "4317:4317"   # OTLP gRPC receiver
       - "4318:4318"   # OTLP HTTP receiver
@@ -244,6 +273,7 @@ services:
 
 volumes:
   seq_data:
+  aspire_data:
   grafana_data:
   elastic-search_data:
   elastic-search_config:

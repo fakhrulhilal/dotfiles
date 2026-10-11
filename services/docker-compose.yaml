@@ -1,5 +1,16 @@
 name: lab
 
+services:
+  # health check binary for shell-less images: the image is FROM scratch (no cp), so mounting the empty
+  # tiny-hc_bin volume over /bin lets Docker seed it with /bin/tiny-hc. Remove the volume to pick up a new version.
+  tool-tiny-hc:
+    image: iroel/tiny-hc:latest
+    container_name: tool.tiny-hc
+    restart: no
+    command: [ "--version" ]
+    volumes:
+      - tiny-hc_bin:/bin
+
 include:
   - db.compose.yaml
   - storage.compose.yaml
@@ -11,6 +22,9 @@ include:
   - otlp.compose.yaml
   #- path: lab/lab.compose.yaml
   #  project_directory: .
+
+volumes:
+  tiny-hc_bin:
 
 secrets:
   app_password:

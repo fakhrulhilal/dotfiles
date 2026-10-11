@@ -289,6 +289,22 @@ browser-console snippets, not Node modules.
   for `.env`. Conventions:
   - Every service has a profile named after its category (extra profiles are allowed), and a healthcheck where the
     image allows one.
+  - Adding a healthcheck:
+    - Probe the service's own health endpoint on `127.0.0.1` from inside its container, and match the body when the
+      status code alone says too little. Set `interval`, `timeout` and `retries`, plus `start_period` for slow starters.
+    - Use what the image already ships (`curl`, `wget`, `bash` with `/dev/tcp`, `node -e "fetch(...)"`). Check with
+      `docker exec <container> <tool> --version`.
+    - An image without a shell or HTTP client (distroless, chiseled, scratch) uses
+      [tiny-hc](https://github.com/fakhrulhilal/tiny-hc): mount the `tiny-hc_bin` volume read-only at `/hc`, depend on
+      `tool-tiny-hc` with `service_completed_successfully`, and use the exec form, because there is no `/bin/sh`:
+      `test: [ "CMD", "/hc/tiny-hc", "--expect-response", "healthy", "http://127.0.0.1:80/health" ]`. Enable the
+      health endpoint first when it is off by default (the `health_check` extension in `otlp.yml`). `otlp-aspire` and
+      `otlp-collector` are the examples.
+    - `tool-tiny-hc` (`docker-compose.yaml`) seeds that volume from the `FROM scratch` image. Docker only seeds an
+      empty volume, so remove `lab_tiny-hc_bin` to pick up a new tiny-hc version.
+    - Never add a sidecar container only to probe another service. One-shot services (`*-init`, `tool-*`) get no
+      healthcheck; dependents wait with `service_completed_successfully`.
+    - Dependents wait with `condition: service_healthy`, not `service_started`.
   - Service `<category>-<name>`, container `<category>.<name>`, volume `<name>_<volume>`.
   - HTTP services expose their port through the `dev.orbstack.http-port` label next to `dev.orbstack.domains`.
   - Run with e.g. `docker compose --profile db up -d`.
