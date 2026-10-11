@@ -88,6 +88,7 @@ fzf = "latest"
         mv "$target_dir/programs" "$MISE_TOOL_INSTALL_PATH/bin"
         '''
 }
+"cargo:oha" = "latest" # alternative for ark, web benchmark tool
 
 # software development
 neovim = "latest"
@@ -122,6 +123,7 @@ redis = "8.6.2"
 "go:tailscale.com/cmd/tailscaled" = "latest"
 "github:nektos/act" = "latest" # Github actions simulator
 gh = "2.101.0"
+"npm:@playwright/cli" = "latest"
 
 [settings]
 

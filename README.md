@@ -24,6 +24,8 @@ My personal shell experience
    3. AI: opencode, copilot, gemini, claude
    4. Neovim
    5. Ngrok: for tunneling 
+   6. [oha](https://github.com/hatoo/oha): web benchmark tool, alternative to ark
+   7. [Playwright](https://playwright.dev): browser automation, useful for AI crafting and browser test
 10. CLI apps (through [mise](config/mise.toml))
     1. lsd (alternative for `ls`)
     2. ripgrep (alternative for `grep`)
