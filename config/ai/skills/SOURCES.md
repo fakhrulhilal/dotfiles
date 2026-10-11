@@ -28,6 +28,7 @@ means an upstream skill that was changed here. Edit both kinds in place.
 | `dotnet-testing`                   | local  | [cleanarchitecture-kit tests](https://github.com/fakhrulhilal/cleanarchitecture-kit/tree/master/tests), [TUnit](https://tunit.dev) | - | TUnit 1.67.0, FakeItEasy 9.0.1 |
 | `topcoat`                          | local  | [tokio-rs/topcoat](https://github.com/tokio-rs/topcoat) `llms.txt`, `docs/`, `demos/coffee-shop`                               | -  | 0.10.0, `341f3ff2fe16` |
 | `rust-backend`                     | local  | todo-dx `api/` (local project, axum JSON API), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457), ASP.NET Core [health checks](https://learn.microsoft.com/aspnet/core/host-and-deploy/health-checks) and [options pattern](https://learn.microsoft.com/dotnet/core/extensions/options) | - | axum 0.8.9, utoipa 6.0.0, sqlx 0.9.0, turso 0.8.2, figment 0.10.19 |
+| `docker-container`                 | local  | this repo's `csharp/Dockerfile`, `services/*.compose.yaml` and AGENTS.md compose conventions, `rust-binary-project` Dockerfile, [tiny-hc](https://github.com/fakhrulhilal/tiny-hc) | - | tiny-hc 0.1.3, .NET 10 |
 
 Considered but not vendored:
 

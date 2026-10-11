@@ -36,6 +36,7 @@ generic advice in any skill.**
 | Console output                                     | `spectre-console`, `pretty-console-expert`                    |
 | Enums                                              | `netescapades-enumgenerators`                                 |
 | Kafka and Schema Registry (`KafkaCli`)             | `kafka-schema-registry`                                       |
+| Dockerfiles, images, Compose services, healthchecks | `docker-container`                                            |
 
 ## Coding style: follow `.editorconfig`
 
