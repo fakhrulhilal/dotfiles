@@ -1,5 +1,5 @@
 # vim: set filetype=zsh:
-[ -z "$DOT_HOME" ] && export DOT_HOME="$(dirname $(dirname "$(realpath "$0")"))"
+[ -z "$DOT_HOME" ] || export DOT_HOME="$(dirname $(dirname "$(realpath "$0")"))"
 if [ -d "$HOME/.dotnet" ]; then
   export DOTNET_ROOT="$HOME/.dotnet"
 elif [ -d /usr/lib/dotnet ]; then
