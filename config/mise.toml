@@ -88,6 +88,17 @@ fzf = "latest"
         mv "$target_dir/programs" "$MISE_TOOL_INSTALL_PATH/bin"
         '''
 }
+herdr = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            herdr completion zsh > "$HOME/.local/share/zsh/completion/_herdr"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            herdr completion bash > "$HOME/.local/share/bash-completion/completions/herdr"
+        fi
+        '''
+}
 "cargo:oha" = "latest" # alternative for ark, web benchmark tool
 "cargo:difftastic" = "latest" # similar to delta, a diff with treesitter support
 "cargo:git-cliff" = "latest" # git changelog generator
