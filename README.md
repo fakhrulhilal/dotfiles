@@ -43,7 +43,8 @@ My personal shell experience
     14. jless, another JSON viewer with tree visualization
     15. DuckDB, DB client across many source
     16. sqlcmd (Go version), DB client for MS SQL
-    17. [herdr](https://herdr.dev), terminal emulation with AI agent integration
+    17. psql, DB client for PostgreSQL
+    18. [herdr](https://herdr.dev), terminal emulation with AI agent integration
 11. [Mac apps](mac_app.txt) (skip by exporting `SKIP_INSTALL_MAC_APPS` variable):
     1. REST toolkit: Bruno, Postman
     2. Ghostty for terminal

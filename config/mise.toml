@@ -47,7 +47,7 @@ zig = "latest"
 
 # AI
 opencode = "latest"
-"npm:@github/copilot" = "latest"
+"copilot" = "latest"
 claude-code = "latest"
 antigravity-cli = "latest"
 
@@ -58,14 +58,12 @@ ripgrep = "latest" # grep alternative
 yq = "latest" # jq with yaml support
 jless = "latest" # another JSON viewer with nested tree
 "cargo:bat" = { version = "latest", depends = "rust" } # cat alternative
-"cargo:git-delta" = { version = "latest", depends = "rust" } # diff viewer
+"github:dandavison/delta" = { version = "latest" } # diff viewer
 fd = "latest" # find alternative
 fzf = "latest"
-"cargo:viddy" = { version = "latest", depends = "rust" } # watch alternative
-"cargo:rgx-cli" = {
+"github:sachaos/viddy" = { version = "latest", depends = "rust" } # watch alternative
+"github:brevity1swos/rgx" = {
     version = "latest",
-    depends = "rust",
-    features = "pcre2-engine",
     postinstall = '''
         if [ -d "$HOME/.local/share/zsh/completion" ]; then
             rgx --completions zsh > "$HOME/.local/share/zsh/completion/_rgx"
@@ -99,7 +97,7 @@ herdr = {
         fi
         '''
 }
-"cargo:oha" = "latest" # alternative for ark, web benchmark tool
+"github:hatoo/oha" = "latest" # alternative for ark, web benchmark tool
 "cargo:difftastic" = "latest" # similar to delta, a diff with treesitter support
 "cargo:git-cliff" = "latest" # git changelog generator
 "cargo:ouch" = "latest" # alternative to tar, compression toolkit
@@ -128,6 +126,43 @@ redis = "8.6.2"
     url = 'https://bin.ngrok.com/c/{{ vars.ngrok_channel_id }}/ngrok-v{{ version }}-stable-{{ os(macos="darwin") }}-{{ arch(x64="amd64", x32="386") }}.{{ os(macos="zip", windows="zip", linux="tgz") }}'
 }
 "github:microsoft/go-sqlcmd" = "latest" # Modernized SQL Server client (sqlcmd Go version)
+# PostgreSQL client (psql, pg_dump, libpq) built from the official source, ported from Homebrew's postgresql@17.
+# macOS takes the libraries from Homebrew; Linux needs libssl-dev, libreadline-dev, liblz4-dev, libzstd-dev, pkg-config.
+"http:postgresql" = {
+    os = ["macos", "linux"],
+    version = "18",
+    url = "https://ftp.postgresql.org/pub/source/v{{ version }}/postgresql-{{ version }}.tar.bz2",
+    checksum_url = "https://ftp.postgresql.org/pub/source/v{{ version }}/postgresql-{{ version }}.tar.bz2.sha256",
+    version_list_url = "https://ftp.postgresql.org/pub/source/",
+    version_regex = 'href="v(\d+(?:\.\d+)+)/"',
+    version_expr = "sortVersions(versions)",
+    bin_path = "bin",
+    postinstall = '''
+        set -e
+        src="$MISE_TOOL_INSTALL_PATH/postgresql-$MISE_TOOL_VERSION"
+        set --
+        if [ "$(uname)" = "Darwin" ]; then
+            for formula in openssl@3 readline lz4 zstd; do
+                prefix="$(brew --prefix --installed "$formula")"
+                export CPPFLAGS="-I$prefix/include $CPPFLAGS" LDFLAGS="-L$prefix/lib $LDFLAGS"
+                export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
+            done
+            set -- "PG_SYSROOT=$(xcrun --show-sdk-path)"
+        fi
+        cd "$src"
+        ./configure --prefix="$MISE_TOOL_INSTALL_PATH" --without-icu --with-openssl --with-lz4 --with-zstd "$@"
+        jobs="-j$(getconf _NPROCESSORS_ONLN)"
+        # build the libraries shared by src/bin first, parallel submakes of them race each other
+        for dir in src/port src/common src/fe_utils; do
+            make -C "$dir" "$jobs"
+        done
+        for dir in src/include src/interfaces src/bin; do
+            make -C "$dir" "$jobs" install
+        done
+        cd "$MISE_TOOL_INSTALL_PATH"
+        rm -rf "$src"
+        '''
+}
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
