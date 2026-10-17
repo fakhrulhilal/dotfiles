@@ -1,9 +1,7 @@
 #!/usr/bin/env -S bun run
 
 import { traceInvocation } from "./otlp";
-import { Command, ValidationError } from "@cliffy/command";
-import { HelpCommand } from "@cliffy/command/help";
-import { CompletionsCommand } from "@cliffy/command/completions";
+import { Command, InvalidArgumentError } from "@commander-js/extra-typings";
 import { Workbook, Worksheet, Table } from "documonster/excel";
 import { Csv } from "documonster/csv";
 import { Span, trace } from "@opentelemetry/api";
@@ -18,13 +16,15 @@ const Config = {
 };
 const tracer = trace.getTracer(Config.name, Config.version);
 
-async function importCommandHandler(span: Span, input: string, output: string | undefined, delimiter: string, force: boolean) {
-    if (!input || !existsSync(input)) {
-        throw new ValidationError(`Input file not found: ${input}`)
-    }
+function parseExistingFile(value: string): string {
+    if (!existsSync(value)) throw new InvalidArgumentError("File not found.");
 
-    const inputPath = input!;
-    const outputPath = typeof output === 'string' ? output : inputPath.replace(/\.csv$/i, '.xlsx');
+    return value;
+}
+
+async function importCommandHandler(span: Span, input: string, output: string | undefined, delimiter: string, force: boolean) {
+    const inputPath = input;
+    const outputPath = output ?? inputPath.replace(/\.csv$/i, '.xlsx');
     span.setAttribute("output.path.resolved", outputPath);
 
     // Parse CSV
@@ -92,13 +92,13 @@ await new Command()
     .name(Config.name)
     .version(Config.version)
     .description(Config.description)
-    .command("import", new Command()
+    .addCommand(new Command("import")
         .description("Import expense from CSV to Excel using table format")
-        .option("-i, --input <file:string>", "Input CSV file.", { required : true })
-        .option("-o, --output [file:string]", "Output Excel file.")
-        .option("-d, --delimiter [character]", "Delimiter character.", { default: ',' })
-        .option("-f, --force [force:boolean]", "Force replace if any", { default : false })
-        .action(async ({ input, output, delimiter, force }, ...args) =>
+        .requiredOption("-i, --input <file>", "Input CSV file.", parseExistingFile)
+        .option("-o, --output <file>", "Output Excel file.")
+        .option("-d, --delimiter <character>", "Delimiter character.", ',')
+        .option("-f, --force", "Force replace if any", false)
+        .action(async ({ input, output, delimiter, force }) =>
             traceInvocation(
                 tracer,
                 "CLI import", {
@@ -108,6 +108,4 @@ await new Command()
                     },
                 },
                 async (span) => await importCommandHandler(span, input, output, delimiter, force))))
-    .command("help", new HelpCommand().global())
-    .command("completions", new CompletionsCommand())
-    .parse();
+    .parseAsync(Bun.argv);
