@@ -127,6 +127,7 @@ redis = "8.6.2"
 "npm:@playwright/cli" = "latest"
 "cargo:topcoat-cli" = "latest"
 "cargo:dioxus-cli" = "latest"
+"cargo:trunk" = "latest"
 "github:microsoft/go-sqlcmd" = "latest" # Modernized SQL Server client (sqlcmd Go version)
 "github:duckdb/duckdb" = "latest"
 # PostgreSQL client (psql, pg_dump, libpq) built from the official source, ported from Homebrew's postgresql@17.
@@ -166,6 +167,7 @@ redis = "8.6.2"
         rm -rf "$src"
         '''
 }
+"github:pgplex/pgschema" = "latest"
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "python" }
