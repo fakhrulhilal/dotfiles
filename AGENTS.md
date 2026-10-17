@@ -278,10 +278,11 @@ requests are in `endpoints/webhook/`.
 
 ## JS/TS scripts (`js/`)
 
-These are Bun scripts (`#!/usr/bin/env -S bun run`). Run `bun install` in `js/` before using them. `.npmrc` sends
-`@jsr` packages to JSR. CLIs use `@cliffy/command`, and `libraries/` holds shared clients (HTTP, JSON-RPC). `otlp.ts`
-sets up OpenTelemetry tracing (`traceInvocation`). The loose `.js` files (Telerik helpers, `clockify.js`) are
-browser-console snippets, not Node modules.
+These are Bun scripts (`#!/usr/bin/env -S bun run`). Run `bun install` in `js/` before using them. Dependencies come
+from the public npm registry only. CLIs use `commander` through `@commander-js/extra-typings` (typed options; keep both
+on the same minor version), and `libraries/` holds shared clients (HTTP, JSON-RPC). `otlp.ts` sets up OpenTelemetry
+tracing (`traceInvocation`). The loose `.js` files (Telerik helpers, `clockify.js`) are browser-console snippets, not
+Node modules.
 
 ## Other directories
 
