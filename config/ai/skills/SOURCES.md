@@ -32,6 +32,7 @@ means an upstream skill that was changed here. Edit both kinds in place.
 | `rust-backend`                     | local  | todo-dx `api/` (local project, axum JSON API), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457), ASP.NET Core [health checks](https://learn.microsoft.com/aspnet/core/host-and-deploy/health-checks) and [options pattern](https://learn.microsoft.com/dotnet/core/extensions/options) | - | axum 0.8.9, utoipa 6.0.0, sqlx 0.9.0, turso 0.8.2, figment 0.10.19 |
 | `docker-container`                 | local  | this repo's `csharp/Dockerfile`, `services/*.compose.yaml` and AGENTS.md compose conventions, `rust-binary-project` Dockerfile, [tiny-hc](https://github.com/fakhrulhilal/tiny-hc) | - | tiny-hc 0.1.3, .NET 10 |
 | `rust-ntex`                        | local  | [docs.ntex.rs](https://docs.ntex.rs) guide (`ntex/docs/` at `7c3b758`), [ntex.rs](https://ntex.rs/docs) docs ([ntex-rs/website](https://github.com/ntex-rs/website) `a4f26cf`), [ntex-rs/examples](https://github.com/ntex-rs/examples) (`0fd78f7`); template verified with compio on macOS | - | ntex 4.3.0, ntex-service 5.2.0, compio 0.19.2 (compio-runtime 0.12.6), Rust 1.99 |
+| `rust-salvo`                       | local  | [salvo-rs/salvo-skills](https://github.com/salvo-rs/salvo-skills) (`68b0c6d`, 29 skills merged into one and corrected for 1.0.1), salvo 1.0.1 crate sources and module docs; every snippet compiled and every behaviour claim run, template tested | - | salvo 1.0.1, tokio 1, jsonwebtoken 11, Rust 1.99 |
 
 Considered but not vendored:
 
