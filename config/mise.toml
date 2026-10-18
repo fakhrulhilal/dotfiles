@@ -98,6 +98,31 @@ herdr = {
         '''
 }
 "github:hatoo/oha" = "latest" # alternative for ark, web benchmark tool
+# wrk (web benchmark tool with Lua scripting) publishes no binaries, so it is built from the release source.
+# macOS links Homebrew's luajit and openssl@3; Linux builds the bundled LuaJIT and OpenSSL
+# (needs make, gcc, perl, unzip).
+"http:wrk" = {
+    os = ["macos", "linux"],
+    version = "4.2.0",
+    url = "https://github.com/wg/wrk/archive/refs/tags/{{ version }}.tar.gz",
+    bin_path = "bin",
+    postinstall = '''
+        set -e
+        src="$MISE_TOOL_INSTALL_PATH/wrk-$MISE_TOOL_VERSION"
+        set -- "VER=$MISE_TOOL_VERSION"
+        if [ "$(uname)" = "Darwin" ]; then
+            luajit="$(brew --prefix --installed luajit)"
+            # the Makefile runs luajit from PATH to compile wrk.lua and expects the luajit-2.1 headers
+            export PATH="$luajit/bin:$PATH" CFLAGS="-I$luajit/include/luajit-2.1 $CFLAGS"
+            set -- "$@" "WITH_LUAJIT=$luajit" "WITH_OPENSSL=$(brew --prefix --installed openssl@3)"
+        fi
+        # serial like Homebrew's formula, the Makefile isn't written for -j
+        make -C "$src" "$@"
+        mkdir -p "$MISE_TOOL_INSTALL_PATH/bin"
+        mv "$src/wrk" "$MISE_TOOL_INSTALL_PATH/bin/"
+        rm -rf "$src"
+        '''
+}
 "cargo:difftastic" = "latest" # similar to delta, a diff with treesitter support
 "cargo:git-cliff" = "latest" # git changelog generator
 "cargo:ouch" = "latest" # alternative to tar, compression toolkit
