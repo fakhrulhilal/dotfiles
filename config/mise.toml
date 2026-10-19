@@ -33,9 +33,7 @@ deno = {
 bun = "latest"
 python = { version = "3.12", postinstall = "pip install --force-reinstall pipx" }
 zig = "latest"
-
-# .NET
-"dotnet:aspire.cli" = "latest"
+aspire = "latest"
 "dotnet:apache.avro.tools" = "1.12.1"
 "dotnet:csharprepl" = "latest"
 "dotnet:dotnet-ef" = "8"

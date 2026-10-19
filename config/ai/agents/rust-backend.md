@@ -2,7 +2,7 @@
 name: rust-backend
 description: "Builds, reviews and tests Rust JSON API backends on axum: handlers with OpenAPI and Swagger UI (utoipa), RFC 9457 problem+json errors, health checks, storage behind one trait with PostgreSQL (sqlx) and Turso/SQLite backends, figment configuration and Docker images. Use for adding or changing endpoints, resources, tables, migrations, settings, health checks, Dockerfiles or compose services in a Rust backend project."
 skills:
-  - rust-backend
+  - rust-axum
   - docker-container
 color: orange
 ---
