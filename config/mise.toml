@@ -32,6 +32,7 @@ deno = {
 }
 bun = "latest"
 python = { version = "3.12", postinstall = "pip install --force-reinstall pipx" }
+uv = "latest" # Python package and project manager
 zig = "latest"
 aspire = "latest"
 "dotnet:apache.avro.tools" = "1.12.1"
@@ -193,7 +194,7 @@ redis = "8.6.2"
 "github:pgplex/pgschema" = "latest"
 
 # cloud
-"pipx:azure-cli" = { version = "latest", depends = "python" }
+"pipx:azure-cli" = { version = "latest", depends = "uv" }
 "cargo:csvlens" = "latest"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
 "go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
@@ -207,6 +208,9 @@ experimental = true
 
 [settings.cargo]
 binstall = true
+
+[settings.pipx]
+uvx = true # install pipx: tools through uv
 
 [bootstrap.macos.trackpad]
 tap_to_click = true
