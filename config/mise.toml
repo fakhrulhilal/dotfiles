@@ -47,7 +47,7 @@ aspire = "latest"
 # AI
 opencode = "latest"
 "copilot" = "latest"
-claude-code = "latest"
+claude = "latest"
 antigravity-cli = "latest"
 
 # shell

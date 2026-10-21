@@ -4,6 +4,7 @@
 # AI
 .agents
 **/skills/synced
+**/graphify-out
 
 # Local configuration
 .env
