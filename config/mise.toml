@@ -11,6 +11,10 @@ dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
 dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
 dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
 
+[shell_alias]
+mdview = "mdfried"
+mdcat = "mdfried"
+
 [tools]
 usage = "latest"
 
@@ -56,6 +60,7 @@ lsd = "latest" # ls alternative
 ripgrep = "latest" # grep alternative
 yq = "latest" # jq with yaml support
 jless = "latest" # another JSON viewer with nested tree
+"cargo:mdfried" = { version = "latest", default-features = false, features = "svg,mermaid" } # markdown viewer
 "cargo:bat" = { version = "latest", depends = "rust" } # cat alternative
 "github:dandavison/delta" = { version = "latest" } # diff viewer
 fd = "latest" # find alternative
