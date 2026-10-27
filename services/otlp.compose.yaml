@@ -65,7 +65,7 @@ services:
     labels:
       dev.orbstack.domains: grafana.otlp.${DOMAIN}
       dev.orbstack.http-port: 3000
-      dev.orbstack.icon: https://grafana.com/static/img/fav32.png
+      dev.orbstack.icon: https://grafana.com/favicon.ico
     restart: unless-stopped
     volumes:
       - grafana_data:/data
@@ -106,10 +106,9 @@ services:
       http.cors.allow-headers: X-Requested-With,Content-Type,Content-Length,Authorization
       http.cors.allow-origin: '"*"'
     secrets:
-      - source: app_password
-        mode: 0400
+      - app_password # bind-mounted: ES requires the host file to be mode 600 (compose ignores secret mode)
     healthcheck:
-      test: [ "CMD-SHELL", "curl -Is -u \"$$ELASTIC_USERNAME:$$(cat /run/secrets/app_password)\" http://localhost:9200/_cluster/health | grep -q '\"timed_out\":false'" ]
+      test: [ "CMD-SHELL", "curl -s -u \"$$ELASTIC_USERNAME:$$(cat /run/secrets/app_password)\" http://localhost:9200/_cluster/health | grep -q '\"timed_out\":false'" ]
       interval: 15s
       timeout: 5s
       retries: 10

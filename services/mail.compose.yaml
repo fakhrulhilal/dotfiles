@@ -47,7 +47,7 @@ services:
       - dev.orbstack.http-port=80
       - dev.orbstack.icon=https://raw.githubusercontent.com/rnwood/smtp4dev/master/Rnwood.Smtp4dev/ClientApp/public/logo.png
     volumes:
-      - ${CERT_DIR}:/certs
+      - certificate:/certs:ro
     healthcheck:
       test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/80'" ]
       interval: 10s
