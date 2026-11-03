@@ -1,18 +1,11 @@
-if command -v dotnet &>/dev/null; then
-    echo "dotnet already installed: $(dotnet --version)"
-    dotnet --list-sdks
-    return
+export DOTNET_ROOT="$HOME/.dotnet"
+export DOTNETUP_ROOT="$HOME/.dotnetup"
+export PATH="$DOTNETUP_ROOT:$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+
+if ! command -v dotnetup >/dev/null 2>&1; then
+  echo "Installing dotnetup"
+  curl -fsSL https://aka.ms/dotnetup/get-dotnetup.sh | bash
 fi
 
-DOTNET_VERSIONS=(6 8 10)
-DOTNET_INSTALL_SCRIPT="/tmp/dotnet-install.sh"
-DOTNET_ROOT="$HOME/.dotnet"
-echo "Installing .NET"
-curl -sSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
-chmod +x "$DOTNET_INSTALL_SCRIPT"
-for version in "${DOTNET_VERSIONS[@]}"; do
-    "$DOTNET_INSTALL_SCRIPT" --channel "${version}.0"
-    "$DOTNET_INSTALL_SCRIPT" --channel "${version}.0" --runtime dotnet
-    echo "✅ .NET ${version} installed"
-done
-rm "$DOTNET_INSTALL_SCRIPT"
+dotnetup env set none --dotnetup-on-path false
+dotnetup sdk install 6.0 8.0 10.0 --install-path "$DOTNET_ROOT" && echo "✅ .NET SDK 6, 8 and 10 installed"

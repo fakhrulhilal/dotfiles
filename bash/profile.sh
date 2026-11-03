@@ -1,11 +1,12 @@
 # vim: set filetype=bash:
 [ -z "$DOT_HOME" ] || export DOT_HOME="$(dirname "$(dirname "$(realpath "$BASH_SOURCE")")")"
+export DOTNETUP_ROOT="$HOME/.dotnetup"
 if [ -d "$HOME/.dotnet" ]; then
   export DOTNET_ROOT="$HOME/.dotnet"
 elif [ -d /usr/lib/dotnet ]; then
   export DOTNET_ROOT="/usr/lib/dotnet"
 fi
-export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.local/bin:$PATH"
+export PATH="$DOTNETUP_ROOT:$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.local/bin:$PATH"
 [ -f "$HOME/.env" ] && source "$HOME/.env"
 [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
 
