@@ -61,11 +61,11 @@ ripgrep = "latest" # grep alternative
 yq = "latest" # jq with yaml support
 jless = "latest" # another JSON viewer with nested tree
 "cargo:mdfried" = { version = "latest", default-features = false, features = "svg,mermaid" } # markdown viewer
-"cargo:bat" = { version = "latest", depends = "rust" } # cat alternative
-"github:dandavison/delta" = { version = "latest" } # diff viewer
+"bat" = { version = "latest" } # cat alternative
+"delta" = { version = "latest" } # diff viewer
 fd = "latest" # find alternative
 fzf = "latest"
-"github:sachaos/viddy" = { version = "latest", depends = "rust" } # watch alternative
+"github:sachaos/viddy" = { version = "latest" } # watch alternative
 "github:brevity1swos/rgx" = {
     version = "latest",
     postinstall = '''
@@ -77,7 +77,7 @@ fzf = "latest"
         fi
         '''
 } # regex helper
-"cargo:darya" = { version = "latest", depends = "rust" } # disk usage analysis
+"github:mrkatebzadeh/darya" = { version = "latest" } # disk usage analysis
 "github:facebook/zstd" = {
     os = ["macos", "linux"],
     version = "latest",
@@ -127,9 +127,9 @@ herdr = {
         rm -rf "$src"
         '''
 }
-"cargo:difftastic" = "latest" # similar to delta, a diff with treesitter support
-"cargo:git-cliff" = "latest" # git changelog generator
-"cargo:ouch" = "latest" # alternative to tar, compression toolkit
+"difftastic" = "latest" # similar to delta, a diff with treesitter support
+"git-cliff" = "latest" # git changelog generator
+"github:ouch-org/ouch" = "latest" # alternative to tar, compression toolkit
 
 # software development
 neovim = "latest"
@@ -155,8 +155,8 @@ redis = "8.6.2"
 }
 "npm:@playwright/cli" = "latest"
 "cargo:topcoat-cli" = "latest"
-"cargo:dioxus-cli" = "latest"
-"cargo:trunk" = "latest"
+"github:DioxusLabs/dioxus" = "latest"
+"github:trunk-rs/trunk" = "latest"
 "github:microsoft/go-sqlcmd" = "latest" # Modernized SQL Server client (sqlcmd Go version)
 "github:duckdb/duckdb" = "latest"
 # PostgreSQL client (psql, pg_dump, libpq) built from the official source, ported from Homebrew's postgresql@17.
@@ -200,7 +200,7 @@ redis = "8.6.2"
 
 # cloud
 "pipx:azure-cli" = { version = "latest", depends = "uv" }
-"cargo:csvlens" = "latest"
+"github:YS-L/csvlens" = "latest"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
 "go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = "latest"
