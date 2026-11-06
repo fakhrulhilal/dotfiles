@@ -206,6 +206,13 @@ redis = "8.6.2"
 "go:tailscale.com/cmd/tailscaled" = "latest"
 "github:nektos/act" = "latest" # Github actions simulator
 gh = "2.101.0"
+"github:max-sixty/worktrunk" = {
+    version = "latest",
+    postinstall = '''
+        wt config plugins claude install --yes
+        wt config plugins opencode install --yes
+        '''
+}
 
 [settings]
 

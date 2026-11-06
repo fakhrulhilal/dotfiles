@@ -49,3 +49,5 @@ fi
 [ -f "$DOT_HOME/bash/aliases.sh" ] && source "$DOT_HOME/bash/aliases.sh"
 [ -f "$HOME/.bash_aliases" ] && source "$HOME/.bash_aliases"
 [ -f "$DOT_HOME/shell/rc.sh" ] && source "$DOT_HOME/shell/rc.sh"
+
+if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init bash)"; fi

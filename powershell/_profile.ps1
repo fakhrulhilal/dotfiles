@@ -36,3 +36,5 @@ foreach ($Module in @('posh-git')) {
 dotnet completions script pwsh | Out-String | Invoke-Expression
 oh-my-posh init pwsh --config (Get-Item (Join-Path -Path $ConfigPath -ChildPath 'ohmyposh-theme.yaml')).FullName | Invoke-Expression
 $Env:PSModulePath = $Env:PSModulePath+";$ScriptPath\Modules"
+
+if (Get-Command wt -ErrorAction SilentlyContinue) { Invoke-Expression (& wt config shell init powershell | Out-String) }
