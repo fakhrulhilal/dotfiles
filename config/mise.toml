@@ -15,6 +15,10 @@ dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
 mdview = "mdfried"
 mdcat = "mdfried"
 
+[env]
+# gcloud prefers python3.14..3.12 from PATH (e.g. Homebrew's) over python3, so point it at mise's python
+CLOUDSDK_PYTHON = "python3"
+
 [tools]
 usage = "latest"
 
@@ -35,7 +39,7 @@ deno = {
         '''
 }
 bun = "latest"
-python = { version = "3.12", postinstall = "pip install --force-reinstall pipx" }
+python = { version = "3.15", postinstall = "pip install --force-reinstall pipx" }
 uv = "latest" # Python package and project manager
 zig = "latest"
 aspire = "latest"
@@ -202,6 +206,15 @@ redis = "8.6.2"
 "pipx:azure-cli" = { version = "latest", depends = "uv" }
 "github:YS-L/csvlens" = "latest"
 "github:Elpulgo/azdo" = "latest" # Azure DevOps client
+"http:gcloud" = {
+    os = ["macos", "linux"],
+    version = "latest",
+    url = 'https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-{{ version }}-{{ os(macos="darwin") }}-{{ arch(x64="x86_64", arm64="arm") }}.tar.gz',
+    version_list_url = "https://dl.google.com/dl/cloudsdk/channels/rapid/components-2.json",
+    version_regex = '"version": "(\d+(?:\.\d+)+)"',
+    bin_path = "google-cloud-sdk/bin",
+    depends = "python" # gcloud needs python 3.10 to 3.15
+}
 "go:tailscale.com/cmd/tailscale" = "latest" # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = "latest"
 "github:nektos/act" = "latest" # Github actions simulator
