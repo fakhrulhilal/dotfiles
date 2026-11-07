@@ -1,0 +1,26 @@
+# AI coding agents and their tooling.
+
+[tools]
+opencode = "latest"
+"copilot" = "latest"
+claude = "latest"
+antigravity-cli = "latest"
+herdr = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            herdr completion zsh > "$HOME/.local/share/zsh/completion/_herdr"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            herdr completion bash > "$HOME/.local/share/bash-completion/completions/herdr"
+        fi
+        '''
+}
+"github:max-sixty/worktrunk" = {
+    version = "latest",
+    depends = ["claude", "opencode"], # postinstall installs their plugins
+    postinstall = '''
+        wt config plugins claude install --yes
+        wt config plugins opencode install --yes
+        '''
+}

@@ -1,0 +1,22 @@
+# Language toolchains. A hard dependency of the other tiers: shell/install/mise.sh links this tier whenever
+# DOT_MINIMAL is unset. Their cargo:, go:, npm: and pipx: tools name their toolchain in `depends`.
+
+[tools]
+rust = "latest"
+cargo-binstall = "latest"
+go = "latest"
+node = "lts"
+deno = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            deno completions zsh > "$HOME/.local/share/zsh/completion/_deno"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            deno completions bash > "$HOME/.local/share/bash-completion/completions/deno"
+        fi
+        '''
+}
+python = { version = "3.15", postinstall = "pip install --force-reinstall pipx" }
+uv = "latest" # Python package and project manager
+zig = "latest"

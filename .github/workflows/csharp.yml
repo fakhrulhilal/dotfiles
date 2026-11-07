@@ -1,6 +1,6 @@
 name: csharp
 
-# Publishes the C# file-based apps that config/mise.toml installs ("csharp:<Script>") as Native AOT archives named
+# Publishes the C# file-based apps that config/mise/ installs ("csharp:<Script>") as Native AOT archives named
 # <AssemblyName>-<target>.tar.gz/.zip for Linux x64, Windows x64/x86 and macOS arm64 (Native AOT has no Linux x86).
 # Every run uploads them as workflow artifacts. On master, every script whose Version has no <AssemblyName>-v<Version>
 # tag yet (e.g. dotclock-v0.1.0) is released: bumping a script's Version releases that tool alone. mise installs it with
@@ -8,9 +8,9 @@ name: csharp
 on:
   push:
     branches: [ master ]
-    paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
+    paths: [ "csharp/**", "config/mise/**", ".github/workflows/csharp.yml" ]
   pull_request:
-    paths: [ "csharp/**", "config/mise.toml", ".github/workflows/csharp.yml" ]
+    paths: [ "csharp/**", "config/mise/**", ".github/workflows/csharp.yml" ]
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
       - name: Select scripts, targets and releases
         id: plan
         run: |
-          scripts=$(grep -oE '"csharp:[A-Za-z0-9_]+"' config/mise.toml | sed -E 's/"csharp:(.*)"/\1/')
+          scripts=$(grep -rhoE '"csharp:[A-Za-z0-9_]+"' config/mise | sed -E 's/"csharp:(.*)"/\1/')
           releases='[]'
           for s in $scripts; do
             props=$(dotnet build "csharp/$s.cs" -getProperty:AssemblyName -getProperty:Version)

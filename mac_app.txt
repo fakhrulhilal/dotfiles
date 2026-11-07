@@ -2,6 +2,7 @@
 github: https://github.com/usebruno/bruno
 https://dl.pstmn.io/download/latest/osx_arm64
 meta: https://release.files.ghostty.org/appcast.xml [url: '.rss.channel.item[-1].enclosure."+@url"'] # Ghostty
+https://releases.herdr.dev/app/Herdr.dmg
 meta: https://data.services.jetbrains.com/products?code=rd&release.type=release (version=latest,arch=macM1) [version: '.[].releases[].version'] [url: '.[].releases[] | select(.version == "{version}") | .downloads.{arch}.link'] # Rider
 meta: https://data.services.jetbrains.com/products?code=dp&release.type=release (version=latest,os=mac,arch=ARM64) [version: '.[].releases[].version'] [url: '.[].releases[] | select(.version == "{version}") | .downloads.{os}{arch}.link'] # dotTrace
 meta: https://data.services.jetbrains.com/products?code=dm&release.type=release (version=latest,os=mac,arch=ARM64) [version: '.[].releases[].version'] [url: '.[].releases[] | select(.version == "{version}") | .downloads.{os}{arch}.link'] # dotMemory

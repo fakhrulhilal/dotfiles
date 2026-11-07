@@ -119,19 +119,28 @@ These apply to every .NET project, including the tools in `csharp/`. For work un
 
 - Entry point: `zsh shell/bootstrap.sh` (macOS) or `bash shell/bootstrap.sh` (Linux). It sets `DOT_HOME` to the repo
   root, then sources `shell/install/*.sh` and `shell/configure/*.sh` in order. Set `SKIP_INSTALL_MAC_APPS` to skip GUI apps
-  (listed in `mac_app.txt`).
+  (listed in `mac_app.txt`). Set `DOT_MINIMAL=1` on small servers: only the minimal mise set and .NET SDK 10.
 - The repo is wired into `$HOME` with **symlinks**, not copies. `relink` (in `shell/functions.sh`) backs up an existing
   target to `*.bak` and then symlinks it. Editing a file in the repo changes the live config right away. Examples:
-  `zsh/rc.zsh` → `~/.zshrc`, `bash/rc.sh` → `~/.bashrc`, `config/mise.toml` → `~/.config/mise/config.toml`. Git is
-  handled differently: `config/git.txt` is added to `~/.gitconfig` with `[include]`.
+  `zsh/rc.zsh` → `~/.zshrc`, `bash/rc.sh` → `~/.bashrc`, `config/mise/config.toml` → `~/.config/mise/config.toml`.
+  Git is handled differently: `config/git.txt` is added to `~/.gitconfig` with `[include]`.
 - `DOT_HOME`, `ZSH_EXT` and `BASH_EXT` are written into `~/.zshenv` / `~/.env`, and every rc file depends on them.
 - How the shell layers load:
   - `shell/*.sh` holds POSIX code shared by zsh and bash (variables, functions, aliases).
   - `zsh/*.zsh` and `bash/*.sh` hold shell-specific code.
   - `shell/rc.sh` runs last and activates mise, oh-my-posh and fnox.
 - Secrets never go in the repo. They belong in `~/.zshenv` / `~/.env` or in fnox (`~/.secret`, which is its own git repo).
-- Almost all dev tools come from mise (`config/mise.toml`), not Homebrew/apt. To add a tool, add an entry there.
-
+- Almost all dev tools come from mise, not Homebrew/apt. To add a tool, add an entry to the matching file:
+  - `config/mise/config.toml` is the minimal set every machine gets (mise essentials, fzf, bat, lsd, yq, bun). Keep
+    it small; only add a tool that a bare server needs.
+  - `config/mise/conf.d/<tier>.toml` holds everything else by category: `lang`, `dotnet`, `ai`, `shell`, `dev`,
+    `cloud`. `shell/install/mise.sh` links every tier into `~/.config/mise/conf.d/`, none with `DOT_MINIMAL=1`, or
+    only some with `DOT_MISE_TIERS="shell dev"`. Each run removes tier links that are no longer selected.
+  - `lang` is a hard dependency: it is always linked unless `DOT_MINIMAL` is set, so other tiers may build with its
+    toolchains.
+  - mise merges all files into one install and orders it by `depends`, so file order doesn't matter. Give every
+    `cargo:` tool `depends = ["rust", "cargo-binstall"]`, every `go:` tool `depends = "go"`, every `npm:` tool
+    `depends = "node"`, and any tool whose build or `postinstall` runs another mise tool a `depends` on it.
 ## C# file-based apps (`csharp/`)
 
 These are .NET 10 single-file apps with no `.csproj`. Project settings live in `#:` directives, and `#:include` needs SDK
@@ -260,18 +269,19 @@ warnings.
 
 ### Installing scripts as mise tools
 
-`csharp/mise-plugin/` is a vfox backend plugin. `config/mise.toml` registers it as `vfox-backend:csharp`. A tool entry
-`"csharp:<Name>" = "latest"` runs `dotnet publish -c Release` on `csharp/<Name>.cs` into the mise install dir. Every
-script reports the single version `latest`, so a change only takes effect after `mise install -f csharp:<Name>`.
+`csharp/mise-plugin/` is a vfox backend plugin. `config/mise/conf.d/dotnet.toml` registers it as
+`vfox-backend:csharp`. A tool entry `"csharp:<Name>" = "latest"` runs `dotnet publish -c Release` on
+`csharp/<Name>.cs` into the mise install dir. Every script reports the single version `latest`, so a change only takes
+effect after `mise install -f csharp:<Name>`.
 
 Prebuilt releases: `.github/workflows/csharp.yml` builds every `csharp:<Name>` entry for linux-x64, win-x64, win-x86
 and osx-arm64 (Native AOT has no linux-x86) with `csharp/package.sh`, checks it with `csharp/smoke.sh` and uploads
 `<AssemblyName>-<target>.tar.gz/.zip` as workflow artifacts. Each script carries its own `#:property Version=`.
 To release one tool, bump that `Version` and push to master. Every master run releases each script whose version has
 no tag `<AssemblyName>-v<Version>` yet (e.g. `dotclock-v0.1.0`) and creates that tag. Never push these tags by hand.
-Users install it through the `[tool_alias]` entries in `config/mise.toml` (`mise use -g dotclock`). Add an alias
-for each new tool: mise caches versions per tool name, so two `github:fakhrulhilal/dotfiles[...]` specs would share
-one cache.
+Users install it through the `[tool_alias]` entries in `config/mise/conf.d/dotnet.toml` (`mise use -g dotclock`). Add
+an alias for each new tool: mise caches versions per tool name, so two `github:fakhrulhilal/dotfiles[...]` specs would
+share one cache.
 
 `WebhookCli.cs` is deployed with `csharp/docker-compose.yaml`, which adds an ngrok sidecar. The matching Bruno/OpenCollection
 requests are in `endpoints/webhook/`.

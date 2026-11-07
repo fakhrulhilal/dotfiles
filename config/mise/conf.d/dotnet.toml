@@ -1,0 +1,22 @@
+# .NET tools and the C# scripts from this repo. Needs the .NET SDK from shell/install/dotnet.sh.
+
+[plugins]
+"vfox-backend:csharp" = "{{ env.DOT_HOME }}/csharp/mise-plugin" # publish *Cli.cs from this repo
+
+# Prebuilt csharp:<Script> releases (tag <AssemblyName>-v<Version>, see .github/workflows/csharp.yml).
+# Install with `mise use -g dotclock`. One alias per tool keeps mise's version caches apart.
+[tool_alias]
+dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
+dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
+dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+
+[tools]
+aspire = "latest"
+"dotnet:apache.avro.tools" = "1.12.1"
+"dotnet:csharprepl" = "latest"
+"dotnet:dotnet-ef" = "8"
+"dotnet:yuniql.cli" = "latest"
+"dotnet:dotnet-reportgenerator-globaltool" = "latest"
+"csharp:ClockifyCli" = "latest" # clock#
+"csharp:KafkaCli" = "latest" # kafka#
+"csharp:WebhookCli" = "latest"

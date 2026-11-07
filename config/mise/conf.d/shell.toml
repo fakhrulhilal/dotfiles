@@ -1,0 +1,46 @@
+# Extra shell utilities on top of the essentials in ../config.toml.
+
+[shell_alias]
+mdview = "mdfried"
+mdcat = "mdfried"
+
+[tools]
+powershell = "latest"
+ripgrep = "latest" # grep alternative
+jless = "latest" # another JSON viewer with nested tree
+"cargo:mdfried" = {
+    version = "latest",
+    default-features = false,
+    features = "svg,mermaid",
+    depends = ["rust", "cargo-binstall"]
+} # markdown viewer
+"delta" = { version = "latest" } # diff viewer, git's pager (config/git.txt)
+"difftastic" = "latest" # similar to delta, a diff with treesitter support
+fd = "latest" # find alternative
+"github:sachaos/viddy" = { version = "latest" } # watch alternative
+"github:brevity1swos/rgx" = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            rgx --completions zsh > "$HOME/.local/share/zsh/completion/_rgx"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            rgx --completions bash > "$HOME/.local/share/bash-completion/completions/rgx"
+        fi
+        '''
+} # regex helper
+"github:mrkatebzadeh/darya" = { version = "latest" } # disk usage analysis
+"github:YS-L/csvlens" = "latest"
+"github:ouch-org/ouch" = "latest" # alternative to tar, compression toolkit
+"github:facebook/zstd" = {
+    os = ["macos", "linux"],
+    version = "latest",
+    asset_pattern = "zstd-{{ version }}.tar.gz",
+    bin_path = "zstd-{{ version }}/programs",
+    filter_bins = "zstdless,zstdgrep",
+    postinstall = '''
+        target_dir="$MISE_TOOL_INSTALL_PATH/zstd-$MISE_TOOL_VERSION"
+        make -C "$target_dir" -j$(sysctl -n hw.ncpu || echo 2)
+        mv "$target_dir/programs" "$MISE_TOOL_INSTALL_PATH/bin"
+        '''
+}

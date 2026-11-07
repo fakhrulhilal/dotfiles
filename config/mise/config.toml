@@ -1,0 +1,52 @@
+# Minimal setup, loaded on every machine (e.g. a small server VPS). Linked to ~/.config/mise/config.toml.
+# Everything else lives in conf.d/<tier>.toml, which shell/install/mise.sh links into ~/.config/mise/conf.d/
+# unless DOT_MINIMAL is set (DOT_MISE_TIERS picks only some tiers).
+
+[tools]
+# mise essentials
+usage = "latest"
+fnox = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            fnox completion zsh > "$HOME/.local/share/zsh/completion/_fnox"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            fnox completion bash > "$HOME/.local/share/bash-completion/completions/fnox"
+        fi
+        '''
+} # secret manager
+age = "latest" # encryption tool
+
+# shell essentials
+fzf = "latest"
+"bat" = { version = "latest" } # cat alternative
+lsd = "latest" # ls alternative
+yq = "latest" # jq with yaml support
+
+# stack (the .NET SDK comes from dotnetup, see shell/install/dotnet.sh)
+bun = "latest"
+
+[settings]
+
+experimental = true
+
+[settings.cargo]
+binstall = true
+
+[settings.pipx]
+uvx = true # install pipx: tools through uv
+
+[bootstrap.macos.trackpad]
+tap_to_click = true
+three_finger_drag = true
+
+[bootstrap.macos.finder]
+show_pathbar = true
+preferred_view_style = "icon"
+
+[bootstrap.macos.dock]
+autohide = true
+orientation = "bottom"
+magnification = true
+largesize = 100
