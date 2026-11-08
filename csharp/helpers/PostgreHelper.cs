@@ -48,7 +48,7 @@ public static class PostgreHelper {
     private static ConfigFactory SetEnum<TValue>(Action<ConnectionBuilder, TValue> setter)
         where TValue : struct, Enum {
         return (value, config) => {
-            if (Enum.TryParse(value, out TValue result)) setter(config, result);
+            if (Enum.TryParse(value, true, out TValue result)) setter(config, result);
         };
     }
 
@@ -238,7 +238,7 @@ public static class PostgreHelper {
             if (!string.IsNullOrEmpty(url.Host)) builder.Host = url.Host;
             if (url is { Port: > 0 }) builder.Port = url.Port.Value;
             var database = url.Path?.Trim('/');
-            if (string.IsNullOrEmpty(database)) builder.Database = database;
+            if (!string.IsNullOrEmpty(database)) builder.Database = database;
             if (!string.IsNullOrEmpty(url.Username) && !string.IsNullOrEmpty(url.Password)) {
                 builder.Username = url.Username;
                 builder.Password = url.Password;

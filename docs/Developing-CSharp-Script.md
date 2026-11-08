@@ -76,7 +76,31 @@ docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --tag myapp:alpine -f alpine
 # build for all os arch
 docker buildx create --name multiarch --driver docker-container --use
 docker buildx inspect --bootstrap
+# build and test for current arch
+docker buildx build --load \
+    --build-arg SCRIPT_FILE=WebhookCli.cs \
+    --label org.opencontainers.image.revision=$(git rev-parse --short HEAD) \
+    --label org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+    -t iroel/webhook .
+docker image inspect iroel/webhook --format '{{.Architecture}} {{.Config.User}}'   # e.g. arm64 1654
+
+# build and push to registry for all archs using docker compose file
 BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) GIT_COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose build --no-cache --builder multiarch --push
+```
+</details>
+
+<details>
+    <summary>Docker deployment</summary>
+
+```shell
+# create one time connection to remote server through ssh
+docker context create my_remote host=ssh://my_user@my.server.com
+
+# deploy
+docker --context my_remote compose up -d --wait
+
+# force redownload for certain service
+docker --context my_remote compose up --pull always -d target_service
 ```
 </details>
 

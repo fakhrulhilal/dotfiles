@@ -1,10 +1,20 @@
 name: dotfiles
 
 services:
+  tool-tiny-hc:
+    image: iroel/tiny-hc:latest
+    container_name: webhook.tiny-hc
+    restart: no
+    command: [ "--version" ]
+    volumes:
+      - tiny-hc_bin:/bin
+
   webhook:
     image: iroel/webhook
     container_name: webhook
     build:
+      context: .
+      dockerfile: Dockerfile
       platforms:
         - linux/amd64
         - linux/arm64
@@ -17,26 +27,33 @@ services:
         org.opencontainers.image.revision: "${GIT_COMMIT_SHA:-unknown}"
         org.opencontainers.image.created: "${BUILD_TIMESTAMP:-unknown}"
         com.docker.desktop.extension.icon: "https://devicons.io/devicons/icons/webhooks.svg"
-        dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
     restart: unless-stopped
-    user: "root"
+    depends_on:
+      tool-tiny-hc:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "/bin/hc", "--expect-body", "healthy", "http://localhost:8080/_health/ready"]
-      start_period: 3s
+      test: [ "CMD", "/hc/tiny-hc", "--expect-response", "healthy", "http://127.0.0.1:8080/_health/ready" ]
       interval: 10s
       timeout: 2s
       retries: 3
+      start_period: 10s
     labels:
       dev.orbstack.domains: webhook.dev.local
       dev.orbstack.http-port: 8080
+      dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
+      traefik.enable: "true"
+      traefik.http.routers.webhook.rule: "Host(`webhook.${DOMAIN:-iroel.xyz}`)"
+      traefik.http.routers.webhook.entrypoints: websecure
+      traefik.http.services.webhook.loadbalancer.server.port: "8080"
     volumes:
+      - tiny-hc_bin:/hc:ro
       - webhook_data:/var/app/data
       - common_data:/var/app/common
     environment:
       ASPNETCORE_URLS: "http://+:8080"
       App__IconPath: "/var/app/common/webhook.ico"
-      Db__Type: Sqlite
-      DB__ConnectionString: "Data Source=/var/app/data/webhook.db;"
+      DB__Type: ${WEBHOOK_DB_TYPE:-Sqlite}
+      DB__ConnectionString: ${WEBHOOK_DB_URL:-Data Source=/var/app/data/webhook.db}
       Logging__LogLevel__Default: "Information"
       Logging__LogLevel__System: "Error"
       Logging__LogLevel__Microsoft: "Error"
@@ -48,14 +65,118 @@ services:
     labels:
       dev.orbstack.domains: proxy.webhook.dev.local
       dev.orbstack.http-port: 4040
+    restart: unless-stopped
     depends_on:
       webhook:
         condition: service_healthy
+    profiles: [ dev, development ]
+    healthcheck:
+      test: >
+        bash -c '
+          exec 3<>/dev/tcp/127.0.0.1/4040 || exit 1;
+          printf "GET /api/tunnels HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          grep -q "public_url" <&3 || exit 1;
+        '
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     environment:
       NGROK_AUTHTOKEN: "$NGROK_TOKEN"
       NGROK_URL: "$NGROK_URL"
     command: http http://webhook:8080 --url "$NGROK_URL"
 
+  # traefik reads container labels through this proxy, which allows only read access to containers and events.
+  # It stays on an internal network, so nothing but traefik can reach it.
+  # Security decision, keep it: never mount docker.sock into traefik instead. `:ro` doesn't limit the Docker API, so
+  # a compromised internet-facing traefik could start a privileged container and own the host, and reading the socket
+  # would force traefik back to root (the socket's docker group id differs per host).
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    container_name: socket-proxy
+    restart: unless-stopped
+    networks: [ socket ]
+    profiles: [ prod, production ]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping | grep -q OK" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+
+  # a fresh named volume is owned by root; hand it to the non-root traefik user, which creates acme.json (0600)
+  traefik-init:
+    image: traefik:v3.7
+    container_name: traefik.init
+    restart: no
+    user: root
+    entrypoint: [ "chown", "65532:65532", "/letsencrypt" ]
+    profiles: [ prod, production ]
+    volumes:
+      - traefik_letsencrypt:/letsencrypt
+
+  # one wildcard certificate (DOMAIN and *.DOMAIN) through the Porkbun DNS challenge, shared by every router;
+  # each container picks its subdomain with traefik.* labels. ACME_CA_SERVER can point to the staging CA.
+  traefik:
+    image: traefik:v3.7
+    container_name: traefik
+    restart: unless-stopped
+    user: "65532:65532"
+    depends_on:
+      traefik-init:
+        condition: service_completed_successfully
+      socket-proxy:
+        condition: service_healthy
+    networks: [ default, socket ]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - traefik_letsencrypt:/letsencrypt
+    profiles: [ prod, production ]
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    environment:
+      PORKBUN_API_KEY: ${PORKBUN_API_KEY:-}
+      PORKBUN_SECRET_API_KEY: ${PORKBUN_SECRET_KEY:-}
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --log.level=INFO
+      - --accesslog=true
+      - --ping=true
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=porkbun
+      - --entrypoints.websecure.http.tls.domains[0].main=${DOMAIN:-iroel.xyz}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN:-iroel.xyz}
+      - --certificatesresolvers.porkbun.acme.email=${ACME_EMAIL:-}
+      - --certificatesresolvers.porkbun.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.porkbun.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - --certificatesresolvers.porkbun.acme.dnschallenge.provider=porkbun
+      - --certificatesresolvers.porkbun.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+
+networks:
+  socket:
+    internal: true
+
 volumes:
+  tiny-hc_bin:
   common_data:
   webhook_data:
+  traefik_letsencrypt:

@@ -283,8 +283,12 @@ Users install it through the `[tool_alias]` entries in `config/mise/conf.d/dotne
 an alias for each new tool: mise caches versions per tool name, so two `github:fakhrulhilal/dotfiles[...]` specs would
 share one cache.
 
-`WebhookCli.cs` is deployed with `csharp/docker-compose.yaml`, which adds an ngrok sidecar. The matching Bruno/OpenCollection
-requests are in `endpoints/webhook/`.
+`WebhookCli.cs` is deployed with `csharp/docker-compose.yaml`: profile `dev` adds an ngrok tunnel, profile `prod` adds
+Traefik with one Let's Encrypt wildcard certificate (Porkbun DNS challenge) and routes each container by its
+`traefik.*` labels. Traefik reaches Docker only through `socket-proxy` (read-only API, internal network). This is a
+security decision: never mount `docker.sock` into Traefik, since `:ro` doesn't limit the API and Traefik faces the
+internet. Variables are listed in `csharp/env.txt`. The matching Bruno/OpenCollection requests are in
+`endpoints/webhook/`.
 
 ## JS/TS scripts (`js/`)
 

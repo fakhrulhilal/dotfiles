@@ -12,7 +12,37 @@ command options.
 
 1. Through mise: see [Home](Home.md) for detail
 2. Using container: [`iroel/webhook`](https://hub.docker.com/r/iroel/webhook) (x64 and MacOS arm64)
-3. Build, run, and expose through Ngrok: see [csharp/docker-compose.yaml](../csharp/docker-compose.yaml)
+3. Build the image yourself and run it with Docker Compose
+
+## Run with Docker Compose
+
+The `webhook` service always runs, unpublished. A profile adds the way in:
+
+| Profile              | Adds                                                            |
+|----------------------|-----------------------------------------------------------------|
+| `dev`, `development` | An ngrok tunnel to `NGROK_URL`                                  |
+| `prod`, `production` | Traefik on ports 80 and 443, serving `https://webhook.<DOMAIN>` |
+
+```shell
+docker compose --profile dev up -d --no-build --wait
+
+# deploy to remote ssh machine
+docker context create my_server host=ssh://server.domain.com # one time
+export FNOX_PROFILE=prod # optionally load credential managed by fnox
+docker --context my_server compose --profile prod up -d --wait
+```
+
+- **Variables:** [`csharp/env.txt`](../csharp/env.txt) lists every variable the stack reads, with sample values.
+    - Real values come from `.env` or, better, from fnox.
+    - `WEBHOOK_DB_TYPE` and `WEBHOOK_DB_CONNECTION` replace the default SQLite database.
+- **Certificate:** Traefik gets the certificate for `DOMAIN` and `*.DOMAIN` through the Porkbun DNS challenge.
+    - Each container picks its subdomain with `traefik.*` labels.
+    - Set `ACME_CA_SERVER` to the Let's Encrypt staging URL for a first test.
+- **Docker socket:** Traefik reads those labels through `socket-proxy`, which allows read access only. Never mount
+  `docker.sock` into Traefik instead: `:ro` doesn't limit the Docker API, and Traefik faces the internet.
+- **Health checks:** the runtime image has no shell, so compose probes `/_health/ready` with
+  [tiny-hc](https://github.com/fakhrulhilal/tiny-hc). It comes from the `tiny-hc_bin` volume, which `tool-tiny-hc`
+  fills.
 
 ## Configuration
 
