@@ -27,3 +27,6 @@ unsetopt EXTENDED_GLOB
 [ -f "$DOT_HOME/shell/rc.sh" ] && source "$DOT_HOME/shell/rc.sh"
 
 if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
+
+# bun completions
+[ -s "/Users/iroel/.bun/_bun" ] && source "/Users/iroel/.bun/_bun"

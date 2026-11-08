@@ -4,7 +4,17 @@
 
 [tools]
 # mise essentials
-usage = "latest"
+usage = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            usage --completions zsh > "$HOME/.local/share/zsh/completion/_usage"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            usage --completions bash > "$HOME/.local/share/bash-completion/completions/usage"
+        fi
+        '''
+}
 fnox = {
     version = "latest",
     postinstall = '''
@@ -19,16 +29,87 @@ fnox = {
 age = "latest" # encryption tool
 
 # shell essentials
-fzf = "latest"
-"bat" = { version = "latest" } # cat alternative
-lsd = "latest" # ls alternative
-yq = "latest" # jq with yaml support
+fzf = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            fzf --zsh > "$HOME/.local/share/zsh/completion/_fzf"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            fzf --bash > "$HOME/.local/share/bash-completion/completions/fzf"
+        fi
+        '''
+}
+"bat" = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            bat --completion zsh > "$HOME/.local/share/zsh/completion/_bat"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            bat --completion bash > "$HOME/.local/share/bash-completion/completions/bat"
+        fi
+        '''
+} # cat alternative
+lsd = {
+    version = "latest",
+    postinstall = '''
+        src="$(echo "$MISE_TOOL_INSTALL_PATH"/lsd-*/autocomplete)" # bundled in the release archive
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            cp "$src/_lsd" "$HOME/.local/share/zsh/completion/_lsd"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            cp "$src/lsd.bash-completion" "$HOME/.local/share/bash-completion/completions/lsd"
+        fi
+        '''
+} # ls alternative
+yq = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            yq completion zsh > "$HOME/.local/share/zsh/completion/_yq"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            yq completion bash > "$HOME/.local/share/bash-completion/completions/yq"
+        fi
+        '''
+} # jq with yaml support
 neovim = "latest"
-lazygit = "latest" # GIT client
-"delta" = { version = "latest" } # diff viewer, git's pager (config/git.txt)
+lazygit = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            lazygit completion zsh > "$HOME/.local/share/zsh/completion/_lazygit"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            lazygit completion bash > "$HOME/.local/share/bash-completion/completions/lazygit"
+        fi
+        '''
+} # GIT client
+"delta" = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            delta --generate-completion zsh > "$HOME/.local/share/zsh/completion/_delta"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            delta --generate-completion bash > "$HOME/.local/share/bash-completion/completions/delta"
+        fi
+        '''
+} # diff viewer, git's pager (config/git.txt)
 
 # stack (the .NET SDK comes from dotnetup, see shell/install/dotnet.sh)
-bun = "latest"
+bun = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            SHELL=/bin/zsh bun completions > "$HOME/.local/share/zsh/completion/_bun"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            SHELL=/bin/bash bun completions > "$HOME/.local/share/bash-completion/completions/bun"
+        fi
+        '''
+}
 
 [settings]
 
