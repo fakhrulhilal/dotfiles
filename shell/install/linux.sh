@@ -24,41 +24,40 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
         fi
         sudo apt update
+        # libicu carries its version in the package name (libicu74 on 24.04, libicu78 on 26.04), so pick the newest
+        icu=$(apt-cache search --names-only '^libicu[0-9]+$' | cut -d' ' -f1 | sort -V | tail -n 1)
         sudo apt install -y \
-            build-essential \
-            libc6 libstdc++6 zlib1g libgssapi-krb5-2 \
+            build-essential clang \
+            libc6 libgcc-s1 libstdc++6 zlib1g zlib1g-dev libgssapi-krb5-2 \
+            "$icu" libssl3t64 tzdata \
             unzip zstd \
             docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-        sudo usermod -aG docker $USER
-        newgrp docker
+        unset icu
+        sudo usermod -aG docker "$USER"
         if [ "$ID" = "pop" ]; then
-            sudo apt install -y \
-                libgcc-s1 clang zlib1g-dev \
-                libicu74 tzdata \
-                libssl3t64 \
-                zst
-        fi
-        if [ "$ID" = "ubuntu" ]; then
-            sudo apt install -y \
-                libgcc1 \
-                libicu76 \
-                libssl3
+            sudo apt install -y zst
         fi
         ;;
     debian)
+        sudo apt-get update
+        icu=$(apt-cache search --names-only '^libicu[0-9]+$' | cut -d' ' -f1 | sort -V | tail -n 1)
         sudo apt-get install -y \
+            build-essential clang zlib1g-dev \
             ca-certificates libssl3t64 \
             libc6 libgcc-s1 zlib1g libstdc++6 libgssapi-krb5-2 \
-            libicu76 tzdata
+            "$icu" tzdata
+        unset icu
         ;;
     fedora)
         sudo dnf install -y \
+            clang zlib-devel \
             glibc libgcc libstdc++ krb5-libs zlib \
             ca-certificates openssl-libs \
             libicu tzdata
         ;;
     rocky|centos|rhel)
-        sudo dnf install \
+        sudo dnf install -y \
+            clang zlib-devel \
             glibc libgcc libstdc++ zlib krb5-libs \
             ca-certificates openssl-libs \
             libicu tzdata
