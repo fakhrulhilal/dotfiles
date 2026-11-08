@@ -1,13 +1,5 @@
 # vim: set filetype=bash:
-[ -z "$DOT_HOME" ] || export DOT_HOME="$(dirname "$(dirname "$(realpath "$BASH_SOURCE")")")"
-export DOTNETUP_ROOT="$HOME/.dotnetup"
-if [ -d "$HOME/.dotnet" ]; then
-  export DOTNET_ROOT="$HOME/.dotnet"
-elif [ -d /usr/lib/dotnet ]; then
-  export DOTNET_ROOT="/usr/lib/dotnet"
-fi
-export PATH="$DOTNETUP_ROOT:$DOTNET_ROOT:$DOTNET_ROOT/tools:$HOME/.local/bin:$PATH"
-[ -f "$HOME/.env" ] && source "$HOME/.env"
+# Login shells only. The environment lives in ~/.bashrc, which non-login shells read too.
 [ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"
 
 # Added by OrbStack: command-line tools and integration

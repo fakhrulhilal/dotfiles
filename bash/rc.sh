@@ -3,6 +3,25 @@
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
 
+# Environment goes here, not in ~/.bash_profile: terminals and multiplexers (herdr, tmux) start non-login shells,
+# and those read only ~/.bashrc
+[ -f "$HOME/.env" ] && source "$HOME/.env"
+export DOTNETUP_ROOT="$HOME/.dotnetup"
+if [ -d "$HOME/.dotnet" ]; then
+  export DOTNET_ROOT="$HOME/.dotnet"
+elif [ -d /usr/lib/dotnet ]; then
+  export DOTNET_ROOT="/usr/lib/dotnet"
+fi
+# prepend in reverse so the order is DOTNETUP_ROOT, DOTNET_ROOT, its tools, ~/.local/bin; skip entries already there
+for dir in "$HOME/.local/bin" ${DOTNET_ROOT:+"$DOTNET_ROOT/tools" "$DOTNET_ROOT"} "$DOTNETUP_ROOT"; do
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) PATH="$dir:$PATH" ;;
+  esac
+done
+export PATH
+unset dir
+
 # If not running interactively, don't do anything
 case $- in
     *i*) ;;
