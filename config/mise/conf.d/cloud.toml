@@ -18,3 +18,4 @@ CLOUDSDK_PYTHON = "python3"
 }
 "go:tailscale.com/cmd/tailscale" = { version = "latest", depends = "go" } # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = { version = "latest", depends = "go" }
+"npm:neon" = { version = "latest", depends = "node" } # Neon CLI; `neon plugins` adds its agent skills + MCP
