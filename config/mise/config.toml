@@ -23,6 +23,9 @@ fzf = "latest"
 "bat" = { version = "latest" } # cat alternative
 lsd = "latest" # ls alternative
 yq = "latest" # jq with yaml support
+neovim = "latest"
+lazygit = "latest" # GIT client
+"delta" = { version = "latest" } # diff viewer, git's pager (config/git.txt)
 
 # stack (the .NET SDK comes from dotnetup, see shell/install/dotnet.sh)
 bun = "latest"

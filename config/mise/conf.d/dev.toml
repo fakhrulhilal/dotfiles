@@ -4,8 +4,6 @@
 ngrok_channel_id = "bNyj1mQVY4c"
 
 [tools]
-neovim = "latest"
-lazygit = "latest" # GIT client
 gh = "2.101.0"
 "git-cliff" = "latest" # git changelog generator
 "github:nektos/act" = "latest" # Github actions simulator
