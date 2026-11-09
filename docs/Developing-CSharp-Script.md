@@ -70,8 +70,13 @@ docker build --build-arg SCRIPT_FILE=MyScriptCli.cs .
 # use another ubuntu distro
 docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --build-arg DISTRO=resolute --tag myapp:resolute .
 
+# drop ICU and tzdata (~38 MB) when the script sets `#:property InvariantGlobalization=true`
+# and never converts time zones in code
+docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --build-arg RUNTIME_VARIANT=chiseled .
+
 # using alpine image
 docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --tag myapp:alpine -f alpine.Dockerfile .
+docker build --build-arg SCRIPT_FILE=MyScriptCli.cs --build-arg RUNTIME_VARIANT= --tag myapp:alpine -f alpine.Dockerfile .
 
 # build for all os arch
 docker buildx create --name multiarch --driver docker-container --use
@@ -83,6 +88,12 @@ docker buildx build --load \
     --label org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
     -t iroel/webhook .
 docker image inspect iroel/webhook --format '{{.Architecture}} {{.Config.User}}'   # e.g. arm64 1654
+# build and push to container registry
+docker buildx build --builder multiarch --platform linux/amd64,linux/arm64 \
+    --build-arg SCRIPT_FILE=WebhookCli.cs --build-arg RUNTIME_VARIANT=chiseled --build-arg DISTRO=resolute \
+    --label org.opencontainers.image.revision=$(git rev-parse --short HEAD) \
+    --label org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+    -t iroel/webhook:slim --push .
 
 # build and push to registry for all archs using docker compose file
 BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) GIT_COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" docker compose build --no-cache --builder multiarch --push

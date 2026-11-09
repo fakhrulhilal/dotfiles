@@ -1,7 +1,7 @@
 #:include ../models/DbParameter.cs
 #:include ../models/Url.cs
 
-#:package Microsoft.Data.Sqlite@10.0.11
+#:package Microsoft.Data.Sqlite@10.0.14
 
 using System.Data;
 using System.Runtime.CompilerServices;

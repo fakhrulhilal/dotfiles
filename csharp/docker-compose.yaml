@@ -20,6 +20,7 @@ services:
         - linux/arm64
       args:
         SCRIPT_FILE: WebhookCli.cs
+        RUNTIME_VARIANT: chiseled
       labels:
         org.opencontainers.image.title: "Webhook Receiver"
         org.opencontainers.image.description: "Simple webhook which receives and validate signature"
