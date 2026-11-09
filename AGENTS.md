@@ -27,6 +27,7 @@ generic advice in any skill.**
 |----------------------------------------------------|---------------------------------------------------------------|
 | C# file-based apps, `#:` directives                | `csharp-scripts`                                              |
 | Native AOT / trimming warnings                     | `dotnet-aot-compat`                                           |
+| Readability, naming, code smells (any language)    | `clean-code`                                                  |
 | Modern C# language features, async                 | `modern-csharp`, `csharp-async`                               |
 | Minimal APIs (`WebhookCli`, `OidcClient`)          | `minimal-apis` (`dotnet-webapi` only for existing controller projects) |
 | Generic Host, DI, options, background work         | `microsoft-extensions`, `worker-services`                     |
