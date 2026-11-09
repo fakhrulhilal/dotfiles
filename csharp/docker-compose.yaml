@@ -43,7 +43,7 @@ services:
       dev.orbstack.http-port: 8080
       dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
       traefik.enable: "true"
-      traefik.http.routers.webhook.rule: "Host(`webhook.${DOMAIN:-iroel.xyz}`)"
+      traefik.http.routers.webhook.rule: "Host(`webhook.${DOMAIN:-iroel.xyz}`) || Host(`event.${DOMAIN:-iroel.xyz}`)"
       traefik.http.routers.webhook.entrypoints: websecure
       traefik.http.services.webhook.loadbalancer.server.port: "8080"
     volumes:
