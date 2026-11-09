@@ -3,6 +3,7 @@
 
 #:package Npgsql@10.0.3
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -107,6 +108,18 @@ public static class PostgreHelper {
         }
     };
 
+    // One pool per connection string, built once, kept for the app's lifetime.
+    // Before, new NpgsqlConnection(cs) did the same thing internally, just with the full builder.
+    private static readonly ConcurrentDictionary<string, NpgsqlDataSource> DataSources = new();
+
+    private static NpgsqlConnection CreateConnection(string connectionString) =>
+        DataSources.GetOrAdd(connectionString, static cs => new NpgsqlSlimDataSourceBuilder(cs)
+                .EnableTransportSecurity() // sslmode=require/verify-*, Neon, any TLS server
+                .EnableJsonTypes() // JSONB <-> JsonDocument/JsonElement
+                .EnableNetworkTypes() // INET <-> IPAddress
+                .Build())
+            .CreateConnection();
+
     private static string WrapSqlQuery(string rawSql) {
         var trimmed = rawSql.Trim().TrimEnd(';');
         var isDml = trimmed.StartsWith("insert", CmpMode) || trimmed.StartsWith("update", CmpMode) ||
@@ -132,9 +145,9 @@ public static class PostgreHelper {
             url = Environment.GetEnvironmentVariable(fallbackEnvName) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(url)) return null;
 
-        return Url.TryParse(url, out var parsedUrl)
+        return Url.TryParse(url, out var parsedUrl) && parsedUrl is not null
             ? parsedUrl.ToPostgreClient()
-            : new NpgsqlConnection(url);
+            : CreateConnection(url);
     }
 
     extension(NpgsqlConnection db) {
@@ -250,7 +263,7 @@ public static class PostgreHelper {
             }
 
             var connectionString = builder.ToString();
-            return new NpgsqlConnection(connectionString);
+            return CreateConnection(connectionString);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿# syntax=docker/dockerfile:1
 ARG DISTRO=noble
+ARG RUNTIME_VARIANT=chiseled-extra
 FROM mcr.microsoft.com/dotnet/sdk:10.0-$DISTRO-aot AS build
 ARG SCRIPT_FILE
 ARG TARGETARCH
@@ -17,11 +18,9 @@ RUN --mount=type=cache,sharing=locked,target=/root/.nuget \
     dotnet publish -o /app $SCRIPT_FILE /p:AssemblyName=launcher -r "$RID" \
         && rm /app/*.dbg
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-$DISTRO-chiseled-extra
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-$DISTRO-$RUNTIME_VARIANT
 LABEL org.opencontainers.image.source="https://github.com/fakhrulhilal/dotfiles"
 WORKDIR /home/app
 COPY --link --from=build /app .
-COPY --from=ghcr.io/fakhrulhilal/tiny-hc /bin/tiny-hc /bin/hc
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 USER $APP_UID
 ENTRYPOINT ["./launcher"]

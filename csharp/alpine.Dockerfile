@@ -1,4 +1,5 @@
 ﻿# syntax=docker/dockerfile:1
+ARG RUNTIME_VARIANT=extra
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine-aot AS build
 ARG SCRIPT_FILE
 ARG TARGETARCH
@@ -16,10 +17,9 @@ RUN --mount=type=cache,sharing=locked,target=/root/.nuget \
     dotnet publish -o /app $SCRIPT_FILE /p:AssemblyName=launcher -r "$RID" \
         && rm /app/*.dbg
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine-extra
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-alpine${RUNTIME_VARIANT:+-$RUNTIME_VARIANT}
 LABEL org.opencontainers.image.source="https://github.com/fakhrulhilal/dotfiles"
 WORKDIR /home/app
 COPY --link --from=build /app .
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 USER $APP_UID
 ENTRYPOINT ["./launcher"]

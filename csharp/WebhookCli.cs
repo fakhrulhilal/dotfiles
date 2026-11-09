@@ -7,6 +7,11 @@
 #:property NoWarn=NU1510,CS2002
 #:property StripSymbols=true
 
+#:property InvariantGlobalization=true
+#:property OptimizationPreference=Size
+#:property EventSourceSupport=false
+#:property StackTraceSupport=false
+
 #:include helpers/PostgreHelper.cs
 #:include helpers/SqliteHelper.cs
 #:include models/JsonConverters.cs
