@@ -19,3 +19,14 @@ CLOUDSDK_PYTHON = "python3"
 "go:tailscale.com/cmd/tailscale" = { version = "latest", depends = "go" } # Tailscale without installation
 "go:tailscale.com/cmd/tailscaled" = { version = "latest", depends = "go" }
 "npm:neon" = { version = "latest", depends = "node" } # Neon CLI; `neon plugins` adds its agent skills + MCP
+"npm:resend-cli" = {
+    version = "latest",
+    postinstall = '''
+        if [ -d "$HOME/.local/share/zsh/completion" ]; then
+            resend completion zsh > "$HOME/.local/share/zsh/completion/_resend"
+        fi
+        if [ -d "$HOME/.local/share/bash-completion/completions" ]; then
+            resend completion bash > "$HOME/.local/share/bash-completion/completions/resend"
+        fi
+        '''
+} # secret manager
