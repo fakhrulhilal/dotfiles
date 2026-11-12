@@ -4,12 +4,12 @@
 ngrok_channel_id = "bNyj1mQVY4c"
 
 [tools]
-gh = "2.101.0"
+gh = "2"
 "git-cliff" = "latest" # git changelog generator
 "github:nektos/act" = "latest" # Github actions simulator
 "github:cube2222/octosql" = "latest" # explore csv, yaml, json using SQL query or event DB
 "github:maif/yozefu" = "latest" # Kafka client
-redis = "8.6.2"
+redis = "8"
 "http:ngrok" = {
     version = "3",
     url = 'https://bin.ngrok.com/c/{{ vars.ngrok_channel_id }}/ngrok-v{{ version }}-stable-{{ os(macos="darwin") }}-{{ arch(x64="amd64", x32="386") }}.{{ os(macos="zip", windows="zip", linux="tgz") }}'
