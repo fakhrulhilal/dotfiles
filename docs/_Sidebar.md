@@ -11,5 +11,6 @@
 **Guides**
 
 - [Developing C# scripts](Developing-CSharp-Script.md)
+- [.NET binary size](dotnet-binary-size-optimization.md)
 - [Tailscale](Connecting-to-Tailscale.md)
 - [Git SSH to the same server](Connecting-to-Git-SSH-to-Same-Server.md)
