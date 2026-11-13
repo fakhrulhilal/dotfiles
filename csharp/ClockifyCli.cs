@@ -5,6 +5,10 @@
 #:property Version=0.1.0
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
 
+#:property OptimizationPreference=Size
+#:property MetricsSupport=false
+#:property HttpActivityPropagationSupport=false
+
 #:include ./helpers/HttpHelper.cs
 #:include ./helpers/ClockHelper.cs
 #:include ./models/clockify/*.cs
@@ -450,6 +454,7 @@ file static class Helper {
 [JsonSerializable(typeof(PostDetailedReportRequest))]
 [JsonSerializable(typeof(PostDetailedReportResponse))]
 [JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true,
     AllowTrailingCommas = true)]
