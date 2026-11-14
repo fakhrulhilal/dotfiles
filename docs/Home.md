@@ -10,6 +10,7 @@ Usage guides for the personal CLI tools in and a few setup notes. The pages are 
 | [ClockifyCli](ClockifyCli.md)     | `dotclock` | Clockify: bulk-add time entries, timesheet per working day      |
 | [KafkaCli](KafkaCli.md)           | `dotkafka` | Kafka: manage topics and Avro schemas, produce messages         |
 | [WebhookCli](WebhookCli.md)       | `dothook`  | Webhook receiver that stores requests, verifies HMAC signatures |
+| [RepositoryCli](RepositoryCli.md) | `dotgit`   | Git tool that manage repositories from single folder/remote     |
 
 ### Getting a tool
 
@@ -21,6 +22,7 @@ arm64. Install one with [mise](https://mise.jdx.dev) by adding an alias to `~/.c
 dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
 dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
 dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+dotgit  = "github:fakhrulhilal/dotfiles[version_prefix=dotgit-v]"
 ```
 
 ```shell

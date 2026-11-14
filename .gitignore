@@ -3,6 +3,7 @@
 docker-compose.override.y?ml
 
 bin/
+!/shell/bin
 obj/
 .ionide/
 project.lock.json
