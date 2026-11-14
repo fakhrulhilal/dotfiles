@@ -13,12 +13,13 @@ set -u
 
 usage() {
   cat <<EOF
-Usage: $0 -k KEYWORDS [options]
+Usage: $0 -k KEYWORDS | -K FILE [options]
 
 Options:
   -p, --path PATH          Folder holding the repositories, or a repository itself
                            (default: current directory)
   -k, --keywords LIST      Comma separated keywords to look for, e.g. STORY-124,ISSUE-01
+  -K, --keyword-path FILE  File holding one keyword per line, combined with --keywords
   -b, --branches LIST      Comma separated branches to search (default: develop)
   -n, --limit-commit N     Number of latest commits per branch to look at (default: 100)
   -j, --jobs N             Repositories scanned in parallel (default: 8)
@@ -60,6 +61,7 @@ regex_escape() {
 
 path="."
 keywords=""
+keyword_path=""
 branches="develop"
 limit=100
 jobs=8
@@ -71,6 +73,8 @@ while [ $# -gt 0 ]; do
     --path=*) path="${1#*=}"; shift ;;
     -k | --keywords) [ $# -ge 2 ] || die "$1 needs a value"; keywords="$2"; shift 2 ;;
     --keywords=*) keywords="${1#*=}"; shift ;;
+    -K | --keyword-path) [ $# -ge 2 ] || die "$1 needs a value"; keyword_path="$2"; shift 2 ;;
+    --keyword-path=*) keyword_path="${1#*=}"; shift ;;
     -b | --branches) [ $# -ge 2 ] || die "$1 needs a value"; branches="$2"; shift 2 ;;
     --branches=*) branches="${1#*=}"; shift ;;
     -n | --limit-commit) [ $# -ge 2 ] || die "$1 needs a value"; limit="$2"; shift 2 ;;
@@ -83,7 +87,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$keywords" ] || { usage >&2; die "--keywords is required"; }
+if [ -n "$keyword_path" ]; then
+  [ -r "$keyword_path" ] || die "keyword file not readable: $keyword_path"
+  keywords="$keywords,$(tr '\n' ',' <"$keyword_path")"
+fi
+[ -n "$(printf '%s' "$keywords" | tr -d ', \t\r')" ] || { usage >&2; die "--keywords or --keyword-path is required"; }
 [ -d "$path" ] || die "path not found: $path"
 is_positive_int "$limit" || die "--limit-commit must be a positive integer: $limit"
 is_positive_int "$jobs" || die "--jobs must be a positive integer: $jobs"

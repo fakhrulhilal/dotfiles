@@ -5,6 +5,7 @@
 - [ClockifyCli](ClockifyCli.md)
 - [KafkaCli](KafkaCli.md)
 - [WebhookCli](WebhookCli.md)
+- [RepositoryCli](RepositoryCli.md)
 - [HashGenerator](HashGenerator.md)
 - [OidcClient](OidcClient.md)
 

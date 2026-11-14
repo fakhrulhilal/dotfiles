@@ -6,9 +6,10 @@
 # Prebuilt csharp:<Script> releases (tag <AssemblyName>-v<Version>, see .github/workflows/csharp.yml).
 # Install with `mise use -g dotclock`. One alias per tool keeps mise's version caches apart.
 [tool_alias]
-dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
-dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
-dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+#dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
+#dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
+#dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
+#dotgit  = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
 
 [tools]
 aspire = "latest"
@@ -17,6 +18,7 @@ aspire = "latest"
 "dotnet:dotnet-ef" = "8"
 "dotnet:yuniql.cli" = "latest"
 "dotnet:dotnet-reportgenerator-globaltool" = "latest"
-"csharp:ClockifyCli" = "latest" # clock#
-"csharp:KafkaCli" = "latest" # kafka#
-"csharp:WebhookCli" = "latest"
+"csharp:ClockifyCli" = "latest" # dotclock#
+"csharp:KafkaCli" = "latest" # dotkafka#
+"csharp:WebhookCli" = "latest" # dothook
+"csharp:RepositoryCli" = "latest" # dotgit
