@@ -43,7 +43,7 @@ services:
       dev.orbstack.http-port: 8080
       dev.orbstack.icon: "https://devicons.io/devicons/icons/webhooks.svg"
       traefik.enable: "true"
-      traefik.http.routers.webhook.rule: "Host(`webhook.${DOMAIN:-iroel.xyz}`) || Host(`event.${DOMAIN:-iroel.xyz}`)"
+      traefik.http.routers.webhook.rule: "Host(`webhook.${ACME_DOMAIN:-iroel.xyz}`) || Host(`event.${ACME_DOMAIN:-iroel.xyz}`)"
       traefik.http.routers.webhook.entrypoints: websecure
       traefik.http.services.webhook.loadbalancer.server.port: "8080"
     volumes:
@@ -123,7 +123,7 @@ services:
     volumes:
       - traefik_letsencrypt:/letsencrypt
 
-  # one wildcard certificate (DOMAIN and *.DOMAIN) through the Porkbun DNS challenge, shared by every router;
+  # one wildcard certificate (ACME_DOMAIN and *.ACME_DOMAIN) through the Porkbun DNS challenge, shared by every router;
   # each container picks its subdomain with traefik.* labels. ACME_CA_SERVER can point to the staging CA.
   traefik:
     image: traefik:v3.7
@@ -164,8 +164,8 @@ services:
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
       - --entrypoints.websecure.http.tls.certresolver=porkbun
-      - --entrypoints.websecure.http.tls.domains[0].main=${DOMAIN:-iroel.xyz}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN:-iroel.xyz}
+      - --entrypoints.websecure.http.tls.domains[0].main=${ACME_DOMAIN:-iroel.xyz}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${ACME_DOMAIN:-iroel.xyz}
       - --certificatesresolvers.porkbun.acme.email=${ACME_EMAIL:-}
       - --certificatesresolvers.porkbun.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.porkbun.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
