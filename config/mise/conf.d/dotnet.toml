@@ -18,6 +18,8 @@ aspire = "latest"
 "dotnet:dotnet-ef" = "8"
 "dotnet:yuniql.cli" = "latest"
 "dotnet:dotnet-reportgenerator-globaltool" = "latest"
+"dotnet:Reverb.Notebooks" = "latest"
+
 "csharp:ClockifyCli" = "latest" # dotclock#
 "csharp:KafkaCli" = "latest" # dotkafka#
 "csharp:WebhookCli" = "latest" # dothook
