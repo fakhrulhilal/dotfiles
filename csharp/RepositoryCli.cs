@@ -1,10 +1,12 @@
 #!/usr/bin/env dotnet --
 
 #:property AssemblyName=dotgit
-#:property Version=0.1.0
+#:property Version=0.1.1
 #:property PackageId=FM.Dotgit
 #:property Description="Git repository toolkit: clone and update many repositories at once."
 #:property PackageTags=dotnet-tool;cli;git;repository
+
+#:include ./models/Result.cs
 
 #:package ConsoleAppFramework@*
 #:package LibGit2Sharp@*
@@ -16,6 +18,7 @@ using LibGit2Sharp;
 using PrettyConsole;
 using Git = LibGit2Sharp.Commands;
 using CC = System.ConsoleColor;
+using Result = Dotfiles.Models.Result<ErrorCodes>;
 
 ConsoleApp.Create().Run(args);
 
@@ -55,7 +58,7 @@ sealed class Commands {
             Debug.Assert(repoPath != null, nameof(repoPath) + " != null");
             switch (await Repository.Update(
                         repoPath, branches, remoteName, TimeSpan.FromSeconds(timeout), cancellationToken)) {
-                case ErrorCodes.Success:
+                case Result.Success:
                     updatedRepos.Add(repoPath);
                     break;
                 default:
@@ -194,18 +197,9 @@ enum ErrorCodes {
     Conflict, NotFastForward
 }
 
-readonly struct Result<TValue>(ErrorCodes status, TValue value) {
-    public bool Successful { get; private init; }
-    public ErrorCodes Error { get; } = status;
-    public TValue Value { get; } = value;
-
-    public static implicit operator Result<TValue>(TValue value) => new(ErrorCodes.Success, value) { Successful = true };
-    public static implicit operator Result<TValue>(ErrorCodes status) => new(status, default!) { Successful = false };
-}
-
 static class Extensions {
     extension(Repository repo) {
-        public static async Task<ErrorCodes> Update(string? path, string[] branches, string remoteName,
+        public static async Task<Result> Update(string? path, string[] branches, string remoteName,
             TimeSpan timeout,
             CancellationToken cancellationToken) {
             var repoName = Path.GetFileName(path);
@@ -214,14 +208,14 @@ static class Extensions {
                 using var gitRepo = new Repository(path);
                 var currentBranch = gitRepo.Head.FriendlyName;
                 Console.WriteLineInterpolated($"    📍 Current branch: {CC.Cyan}{currentBranch}{CC.Default}");
-                if (gitRepo.Stash() is { Successful: true, Value: var stashName }) {
+                if (gitRepo.Stash() is Result.HasValue<string> { Value: var stashName }) {
                     Console.WriteLineInterpolated(
                         $"    💾 Uncomitted change stashed as: {CC.Cyan}{stashName}{CC.Default}");
                 }
 
                 var targetBranch = currentBranch;
                 switch (gitRepo.PickAvailableBranches(branches, remoteName)) {
-                    case { Successful: true, Value: var branch }:
+                    case Result.HasValue<Branch> { Value: var branch }:
                         if (branch.FriendlyName != currentBranch) {
                             Console.WriteLineInterpolated(
                                 $"    🔄 Switching to branch: {CC.Cyan}{branch.FriendlyName}{CC.Default}");
@@ -279,7 +273,7 @@ static class Extensions {
             }
         }
 
-        public Result<Branch> PickAvailableBranches(string[] branches, string remoteName) {
+        public Result.WithValue<Branch> PickAvailableBranches(string[] branches, string remoteName) {
             if (repo.Network.Remotes[remoteName] is null) return ErrorCodes.RemoteNotFound;
 
             var currentBranch = repo.Head.FriendlyName;
@@ -304,7 +298,7 @@ static class Extensions {
 
         }
 
-        public async Task<Result<bool>> UpdateFromRemoteBranch(string remoteName, string branchName,
+        public async Task<Result> UpdateFromRemoteBranch(string remoteName, string branchName,
             CancellationToken cancellationToken) {
             var remote = repo.Network.Remotes[remoteName];
             if (remote is null) return ErrorCodes.RemoteNotFound;
@@ -330,13 +324,13 @@ static class Extensions {
             }
         }
 
-        public Result<bool> Integrate(Branch upstream) {
+        public Result Integrate(Branch upstream) {
             var branchName = repo.Head.FriendlyName;
             var originalTip = repo.Head.Tip;
             var mergeBase = repo.ObjectDatabase.FindMergeBase(originalTip, upstream.Tip);
             if (mergeBase?.Sha == upstream.Tip.Sha) {
                 Console.WriteLine("    👌 Already up to date");
-                return true;
+                return Result.Ok();
             }
 
             if (repo.Config.BuildSignature(DateTimeOffset.Now) is not { } signature) {
@@ -352,7 +346,7 @@ static class Extensions {
 
                 var fastForwardOnly = new MergeOptions { FastForwardStrategy = FastForwardStrategy.FastForwardOnly };
                 repo.Merge(upstream, signature, fastForwardOnly);
-                return true;
+                return Result.Ok();
             }
 
             if (rebase) {
@@ -369,7 +363,7 @@ static class Extensions {
                     failure = ex.Message;
                 }
 
-                if (result?.Status == RebaseStatus.Complete) return true;
+                if (result?.Status == RebaseStatus.Complete) return Result.Ok();
 
                 if (repo.Info.CurrentOperation != CurrentOperation.None) repo.Rebase.Abort();
 
@@ -399,7 +393,7 @@ static class Extensions {
                 $"    🔀 Merging {CC.Cyan}{upstream.FriendlyName}{CC.Default} into {CC.Cyan}{branchName}{CC.Default}");
 
             var merge = repo.Merge(upstream, signature, new MergeOptions { FastForwardStrategy = strategy });
-            if (merge.Status != MergeStatus.Conflicts) return true;
+            if (merge.Status != MergeStatus.Conflicts) return Result.Ok();
 
             repo.Reset(ResetMode.Hard, originalTip);
             Console.WriteLineInterpolated(
@@ -408,7 +402,7 @@ static class Extensions {
             return ErrorCodes.Conflict;
         }
 
-        public Result<string> Stash() {
+        public Result.WithValue<string> Stash() {
             if (repo.RetrieveStatus() is not { IsDirty: true })
                 return ErrorCodes.NoPendingChange;
 
