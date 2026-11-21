@@ -8,7 +8,7 @@
 # command. The files sit at the archive root, without debug symbols.
 #
 # Usage: package.sh [--pointer] <Script[.cs]> <rid> [out-dir]
-#   rid: linux-x64 | win-x64 | win-x86 | osx-arm64
+#   rid: linux-x64 | win-x64 | osx-arm64
 #   --pointer: also pack the pointer package; <rid> must then be this host's RID, because the SDK packs both at once.
 set -euo pipefail
 
@@ -28,7 +28,6 @@ cd "$(dirname "$0")"
 case "$rid" in
   linux-x64) target=x86_64-unknown-linux-gnu ;;
   win-x64) target=x86_64-pc-windows-msvc ;;
-  win-x86) target=i686-pc-windows-msvc ;;
   osx-arm64) target=aarch64-apple-darwin ;;
   *) echo "unsupported rid: $rid" >&2; exit 2 ;;
 esac
@@ -41,7 +40,7 @@ id=$(prop PackageId)
 [[ -n "$name" ]] || name=$(basename "$script" .cs)
 
 # Every RID the pointer package lists. MSBuild splits a `-p:` value on ';', so it is passed from the environment.
-export ToolPackageRuntimeIdentifiers='linux-x64;win-x64;win-x86;osx-arm64'
+export ToolPackageRuntimeIdentifiers='linux-x64;win-x64;osx-arm64'
 rid_args=(-r "$rid")
 if $pointer; then
   host=$(prop NETCoreSdkPortableRuntimeIdentifier)
