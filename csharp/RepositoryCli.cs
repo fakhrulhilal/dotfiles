@@ -16,6 +16,7 @@ using System.Diagnostics;
 using ConsoleAppFramework;
 using LibGit2Sharp;
 using PrettyConsole;
+using static ErrorCodes;
 using Git = LibGit2Sharp.Commands;
 using CC = System.ConsoleColor;
 using Result = Dotfiles.Models.Result<ErrorCodes>;
@@ -145,7 +146,7 @@ sealed class Commands {
 
         Console.CursorVisible = true;
         Console.SkipLines(repositories.Length);
-        if (repositories.Any(repo => repo.Status is ErrorCodes.Unknown or ErrorCodes.Timeout)) {
+        if (repositories.Any(repo => repo.Status is Unknown or ErrorCodes.Timeout)) {
             Console.WriteLine("⚠️  Some repositories failed to clone. Check the output above for details.");
             return 1;
         }
@@ -164,21 +165,21 @@ sealed class CloneTask(
     public string Path { get; } = System.IO.Path.Combine(destinationBasePath, name);
     public string Url { get; } = $"{repositoryBaseUrl}/{name}";
     public CloneOptions Options { get; } = options ?? new();
-    public ErrorCodes Status { get; set; } = ErrorCodes.InProgress;
+    public ErrorCodes Status { get; set; } = InProgress;
     public string? ErrorMessage { get; set; }
 
     public void Dump(in string inProgressIcon) {
         switch (Status) {
-            case ErrorCodes.Success:
+            case Success:
                 Console.WriteLineInterpolated(OutputPipe.Error, $"{CC.Green}✔︎{CC.DefaultForeground}  {Name}");
                 break;
-            case ErrorCodes.Duplicate:
+            case Duplicate:
                 Console.WriteLineInterpolated(OutputPipe.Error, $"⚠️ {Name}: already exists");
                 break;
             case ErrorCodes.Timeout:
                 Console.WriteLineInterpolated(OutputPipe.Error, $"⏱️ {Name}: {ErrorMessage}");
                 break;
-            case ErrorCodes.Unknown when !string.IsNullOrEmpty(ErrorMessage):
+            case Unknown when !string.IsNullOrEmpty(ErrorMessage):
                 Console.WriteLineInterpolated(OutputPipe.Error, $"❌ {Name}: {ErrorMessage}");
                 break;
             default:
@@ -224,38 +225,38 @@ static class Extensions {
                         targetBranch = branch.FriendlyName;
                         Git.Checkout(gitRepo, branch);
                         break;
-                    case { Error: ErrorCodes.BranchNotFound }:
+                    case Result.Failure { Error: BranchNotFound }:
                         Console.WriteLineInterpolated(
                             $"    ⚠️ None of the target branches ({string.Join(", ", branches)}) found. Staying on: {CC.Cyan}{currentBranch}{CC.Default}.");
 
                         break;
-                    case { Error: ErrorCodes.RemoteNotFound }:
+                    case Result.Failure { Error: RemoteNotFound }:
                         Console.WriteLineInterpolated($"    ⚠️ Remote {CC.Cyan}{remoteName}{CC.Default} is not found.");
-                        return ErrorCodes.RemoteNotFound;
+                        return RemoteNotFound;
                 }
 
                 Console.WriteLine("    📥 Fetching latest changes...");
                 using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutSource.CancelAfter(timeout);
                 switch (await gitRepo.UpdateFromRemoteBranch(remoteName, targetBranch, timeoutSource.Token)) {
-                    case { Successful: true }:
+                    case Result.Success:
                         Console.WriteLineInterpolated(
                             $"    ✅ Successfully updated {CC.Cyan}{targetBranch}{CC.Default}");
 
                         break;
-                    case { Error: ErrorCodes.BranchNotFound }:
+                    case Result.Failure { Error: BranchNotFound }:
                         Console.WriteLineInterpolated(
                             $"    ⚠️ Branch {CC.Cyan}{targetBranch}{CC.Default} doesn't exist on remote {CC.Cyan}{remoteName}{CC.Default}.");
 
                         break;
-                    case { Error: ErrorCodes.RemoteNotFound }:
+                    case Result.Failure { Error: RemoteNotFound }:
                         Console.WriteLineInterpolated($"    ⚠️ Remote {CC.Cyan}{remoteName}{CC.Default} is not found.");
-                        return ErrorCodes.RemoteNotFound;
-                    case { Error: ErrorCodes.Conflict or ErrorCodes.NotFastForward or ErrorCodes.Unknown } failure:
+                        return RemoteNotFound;
+                    case Result.Failure { Error: ErrorCodes.Conflict or NotFastForward or Unknown } failure:
                         return failure.Error;
                 }
 
-                return ErrorCodes.Success;
+                return Success;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                 Console.WriteLine($"    ⏱️ Timed out after {timeout.TotalSeconds}s");
@@ -265,16 +266,16 @@ static class Extensions {
                 Console.WriteLineInterpolated(
                     $"    ⚠️ Skipping {CC.Cyan}{repoName}{CC.Default} - not a valid git repository");
 
-                return ErrorCodes.InvalidGitRepo;
+                return InvalidGitRepo;
             }
             catch (Exception ex) {
                 Console.WriteLine($"    ❌ Error: {ex.Message}");
-                return ErrorCodes.Unknown;
+                return Unknown;
             }
         }
 
         public Result.WithValue<Branch> PickAvailableBranches(string[] branches, string remoteName) {
-            if (repo.Network.Remotes[remoteName] is null) return ErrorCodes.RemoteNotFound;
+            if (repo.Network.Remotes[remoteName] is null) return RemoteNotFound;
 
             var currentBranch = repo.Head.FriendlyName;
             string? targetBranch = null;
@@ -287,7 +288,7 @@ static class Extensions {
 
             if (targetBranch == currentBranch) return repo.Branches[currentBranch];
 
-            if (targetBranch == null) return ErrorCodes.BranchNotFound;
+            if (targetBranch == null) return BranchNotFound;
 
             if (repo.Branches[targetBranch] is { } localBranch) return localBranch;
 
@@ -295,13 +296,12 @@ static class Extensions {
             var newBranch = repo.CreateBranch(targetBranch, remoteBranch.Tip);
             repo.Branches.Update(newBranch, b => b.TrackedBranch = remoteBranch.CanonicalName);
             return newBranch;
-
         }
 
         public async Task<Result> UpdateFromRemoteBranch(string remoteName, string branchName,
             CancellationToken cancellationToken) {
             var remote = repo.Network.Remotes[remoteName];
-            if (remote is null) return ErrorCodes.RemoteNotFound;
+            if (remote is null) return RemoteNotFound;
 
             var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification).ToArray();
             var gitDir = repo.Info.Path;
@@ -310,7 +310,7 @@ static class Extensions {
                 .WaitAsync(cancellationToken);
 
             var remoteBranchRef = repo.Branches[$"{remoteName}/{branchName}"];
-            if (remoteBranchRef is null) return ErrorCodes.BranchNotFound;
+            if (remoteBranchRef is null) return BranchNotFound;
 
             return repo.Integrate(remoteBranchRef);
 
@@ -335,7 +335,7 @@ static class Extensions {
 
             if (repo.Config.BuildSignature(DateTimeOffset.Now) is not { } signature) {
                 Console.WriteLine("    ❌ Git identity is not configured, set user.name and user.email");
-                return ErrorCodes.Unknown;
+                return Unknown;
             }
 
             var rebase = repo.Config.PullRebases(branchName);
@@ -373,7 +373,7 @@ static class Extensions {
                     Console.WriteLineInterpolated(
                         $"    ❌ Rebase failed ({failure}), rebase aborted and {CC.Cyan}{branchName}{CC.Default} left unchanged");
 
-                    return ErrorCodes.Unknown;
+                    return Unknown;
                 }
 
                 Console.WriteLineInterpolated(
@@ -386,7 +386,7 @@ static class Extensions {
                 Console.WriteLineInterpolated(
                     $"    ⚠️ Cannot fast-forward {CC.Cyan}{branchName}{CC.Default} to {CC.Cyan}{upstream.FriendlyName}{CC.Default} (ff = only)");
 
-                return ErrorCodes.NotFastForward;
+                return NotFastForward;
             }
 
             Console.WriteLineInterpolated(
@@ -404,7 +404,7 @@ static class Extensions {
 
         public Result.WithValue<string> Stash() {
             if (repo.RetrieveStatus() is not { IsDirty: true })
-                return ErrorCodes.NoPendingChange;
+                return NoPendingChange;
 
             var stashName = $"auto_stash_{TimeProvider.System.GetLocalNow():yyyyMMdd_HHmm}";
             var signature = repo.Config.BuildSignature(DateTimeOffset.Now);
@@ -444,14 +444,14 @@ static class Extensions {
             timeoutSource.CancelAfter(timeout);
             try {
                 if (Directory.Exists(repo.Path)) {
-                    repo.Status = ErrorCodes.Duplicate;
+                    repo.Status = Duplicate;
                     return;
                 }
 
                 repo.Options.FetchOptions.StopWhen(timeoutSource.Token);
                 await Task.Run(() => Repository.Clone(repo.Url, repo.Path, repo.Options), timeoutSource.Token)
                     .WaitAsync(timeoutSource.Token);
-                repo.Status = ErrorCodes.Success;
+                repo.Status = Success;
                 await Task.Delay(50, cancellationToken);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
@@ -460,7 +460,7 @@ static class Extensions {
                 if (Directory.Exists(repo.Path)) Directory.Delete(repo.Path, true);
             }
             catch (Exception ex) {
-                repo.Status = ErrorCodes.Unknown;
+                repo.Status = Unknown;
                 repo.ErrorMessage = ex.Message;
             }
         }

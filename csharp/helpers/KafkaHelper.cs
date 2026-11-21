@@ -304,7 +304,7 @@ internal static class KafkaHelper {
             ArgumentNullException.ThrowIfNull(message);
             var result = await client.GetSchema(topic);
             if (result is not Result.HasValue<SchemaInfo> { Value: var schemaInfo })
-                return result.Error;
+                return result.Error!;
 
             var record = JsonToGenericRecord(jsonPayload, schemaInfo.Schema);
             var serializedPayload = await schemaInfo.Serializer.SerializeAsync(record,

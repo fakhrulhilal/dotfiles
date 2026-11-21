@@ -118,12 +118,13 @@ sealed class Commands {
             throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
         var schemaResult = await schemaRegistryClient.GetSchema(topic);
         if (schemaResult is not Result.HasValue<SchemaInfo> { Value: var schema }) {
-            switch (schemaResult.Error) {
-                case { Code: Codes.NotFound }:
+            switch (schemaResult) {
+                case Result.Failure { Error.Code: Codes.NotFound }:
                     Console.WriteLineInterpolated(
                         $"{CC.Red}❌ Error{CC.Default}: Could not find valid schema for topic: '{topic}'");
                     break;
-                case { Code: Codes.Unknown, Message: var errorDetail } when !string.IsNullOrEmpty(errorDetail):
+                case Result.Failure { Error: { Code: Codes.Unknown, Message: var errorDetail } }
+                    when !string.IsNullOrEmpty(errorDetail):
                     Console.WriteLineInterpolated(
                         $"{CC.Red}❌ Error{CC.Default}: Unknown error during getting schema for topic: '{topic}': {CC.Red}{errorDetail}{CC.Default}");
                     break;
@@ -140,7 +141,7 @@ sealed class Commands {
         table.AddColumn("Offset", x => x.RightAligned()).Width(40);
         table.AddColumn("Payload", x => x.LeftAligned()).Width(100).Expand();
         await AnsiConsole.Live(table).StartAsync(async ctx => {
-            int pageNumber = 1;
+            var pageNumber = 1;
             ctx.Refresh();
             var producingTasks = new List<Task<ProduceResult>>(batchSize);
             await foreach (var line in File.ReadLinesAsync(messagePath)) {
@@ -240,16 +241,16 @@ sealed class Commands {
             Console.WriteLineInterpolated(
                 $"{CC.White}㉿{CC.Default} Found topic config: {CC.Cyan}{spec.Topic}{CC.Default} with schema {CC.Cyan}{spec.ValueSchema}{CC.Default}");
             switch (await adminClient.RegisterTopicAsync(spec.Topic, totalPartition, totalReplication)) {
-                case { Successful: true }:
+                case Result.Success:
                     createdTopicCount++;
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Topic created (partitions: {totalPartition}, replication: {totalReplication})");
                     break;
-                case { Successful: false, Error.Code: Codes.AlreadyExists }:
+                case Result.Failure { Error.Code: Codes.AlreadyExists }:
                     Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
                     skippedTopics.Add(spec.Topic);
                     break;
-                case { Successful: false, Error.Code: Codes.Unknown, Error.Message: var errorDetail }
+                case Result.Failure { Error.Code: Codes.Unknown, Error.Message: var errorDetail }
                     when !string.IsNullOrEmpty(errorDetail):
                     Console.WriteLineInterpolated(
                         $"    {CC.Red}✗{CC.Default} Failed to create topic: {spec.Topic}, {CC.Red}{errorDetail}{CC.Default}");
@@ -265,12 +266,12 @@ sealed class Commands {
                         $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     registeredSchemaCount++;
                     break;
-                case { Successful: false, Error.Code: Codes.NotFound }:
+                case Result.Failure { Error.Code: Codes.NotFound }:
                     var schemaPath = Path.Combine(schemaDir!, spec.ValueSchema);
                     Console.WriteLineInterpolated(
                         $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
                     break;
-                case { Successful: false }:
+                default:
                     Console.WriteLineInterpolated(
                         $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}");
                     failedRegisterSchemas.Add(spec.Topic);
@@ -346,14 +347,14 @@ sealed class Commands {
             BuildKafkaAdminClient(kafkaUrl, logHandler: Silence, errorHandler: Silence)
             ?? throw new ArgumentNullException(nameof(kafkaUrl), "Kafka URL is not specified properly");
         switch (await adminClient.RegisterTopicAsync(topic, partition, replication)) {
-            case { Successful: true }:
+            case Result.Success:
                 Console.WriteLineInterpolated(
                     $"    {CC.Green}✓{CC.Default} Topic created (partitions: {partition}, replication: {replication})");
                 break;
-            case { Successful: false, Error.Code: Codes.AlreadyExists }:
+            case Result.Failure { Error.Code: Codes.AlreadyExists }:
                 Console.WriteLineInterpolated($"    {CC.Yellow}⚠{CC.Default} Topic already exists");
                 break;
-            case { Successful: false, Error.Code: Codes.Unknown, Error.Message: var errorDetail }
+            case Result.Failure { Error.Code: Codes.Unknown, Error.Message: var errorDetail }
                 when !string.IsNullOrEmpty(errorDetail):
                 Console.WriteLineInterpolated(
                     $"    {CC.Red}✗{CC.Default} Failed to create topic: {topic}, {CC.Red}{errorDetail}{CC.Default}");
@@ -370,11 +371,11 @@ sealed class Commands {
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     break;
-                case { Successful: false, Error.Code: Codes.NotFound }:
+                case Result.Failure { Error.Code: Codes.NotFound }:
                     Console.WriteLineInterpolated(
                         $"    {CC.Yellow}⚠{CC.Default} Schema file not found: {CC.Cyan}{schemaPath}{CC.Default}");
                     break;
-                case { Successful: false }:
+                case Result.Failure:
                     Console.WriteLineInterpolated(
                         $"    {CC.Red}✗{CC.Default} Failed to register schema for {CC.Cyan}{subject}{CC.Default}");
                     break;
