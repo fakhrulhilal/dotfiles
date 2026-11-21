@@ -1,11 +1,10 @@
 #:include ../models/DbParameter.cs
 #:include ../models/Url.cs
 
-#:package Microsoft.Data.Sqlite@10.0.14
+#:package Microsoft.Data.Sqlite@11.0
 
 using System.Data;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Dotfiles.Models;

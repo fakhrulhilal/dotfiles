@@ -1,14 +1,12 @@
 #:include ../models/Url.cs
 #:include ../models/PagedQuery.cs
-#:package Microsoft.Data.SqlClient@7.0.2
+#:package Microsoft.Data.SqlClient@7.1.2
 
 using System.Data;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using Dotfiles.Models;
-using Microsoft.Data.SqlClient;
 
 namespace Dotfiles.Helpers;
 

@@ -1,7 +1,7 @@
 #:include ../models/DbParameter.cs
 #:include ../models/Url.cs
 
-#:package Npgsql@10.0.3
+#:package Npgsql@11.0
 
 using System.Collections.Concurrent;
 using System.Data;
@@ -133,7 +133,7 @@ public static class PostgreHelper {
                SELECT row_to_json(__q__) FROM __q__
                """"
             : $"""
-               SELECT row_to_json(__q__) 
+               SELECT row_to_json(__q__)
                FROM (
                    {rawSql}
                ) __q__
