@@ -1,7 +1,7 @@
 name: csharp
 
 # Publishes the C# file-based apps that config/mise/ installs ("csharp:<Script>") as Native AOT archives named
-# <AssemblyName>-<target>.tar.gz/.zip for Linux x64, Windows x64/x86 and macOS arm64 (Native AOT has no Linux x86).
+# <AssemblyName>-<target>.tar.gz/.zip for Linux, Windows and macOS arm64 (no 32-bit builds).
 # Every run uploads them as workflow artifacts. On master, every script whose Version has no <AssemblyName>-v<Version>
 # tag yet (e.g. dotclock-v0.1.0) is released: bumping a script's Version releases that tool alone. mise installs it with
 #   mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]'
@@ -83,7 +83,6 @@ jobs:
           targets='[
             { "rid": "linux-x64", "os": "ubuntu-latest", "pointer": true },
             { "rid": "win-x64", "os": "windows-latest", "pointer": false },
-            { "rid": "win-x86", "os": "windows-latest", "pointer": false },
             { "rid": "osx-arm64", "os": "macos-latest", "pointer": false }
           ]'
           # shellcheck disable=SC2086 # one script name per word
@@ -200,8 +199,7 @@ jobs:
       - name: Check all packages are present
         run: |
           missing=0
-          for t in x86_64-unknown-linux-gnu.tar.gz x86_64-pc-windows-msvc.zip i686-pc-windows-msvc.zip \
-                   aarch64-apple-darwin.tar.gz; do
+          for t in x86_64-unknown-linux-gnu.tar.gz x86_64-pc-windows-msvc.zip aarch64-apple-darwin.tar.gz; do
             f=$TOOL-$t
             if [[ -f "release/$f" ]]; then echo "ok      $f"; else echo "::error::missing $f"; missing=1; fi
           done
@@ -278,7 +276,7 @@ jobs:
     env:
       ID: ${{ matrix.id }}
       VERSION: ${{ matrix.version }}
-      RIDS: linux-x64 win-x64 win-x86 osx-arm64
+      RIDS: linux-x64 win-x64 osx-arm64
     steps:
       - uses: actions/download-artifact@v8
         with:

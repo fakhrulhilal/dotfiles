@@ -123,7 +123,7 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
 
 [![build](https://img.shields.io/github/actions/workflow/status/fakhrulhilal/dotfiles/csharp.yml?branch=master&label=build)](https://github.com/fakhrulhilal/dotfiles/actions/workflows/csharp.yml)
 
-Native AOT builds of the C# file-based apps in [csharp/](csharp) for Linux x64, Windows x64/x86 and macOS arm64,
+Native AOT builds of the C# file-based apps in [csharp/](csharp) for Linux, Windows and macOS Apple chip (64bit only), 
 published as GitHub releases and as .NET tools on nuget.org. Each tool is versioned on its own and released as soon as
 its version is bumped: on the tag `<tool>-v<version>` and as the nuget.org package `FM.<Tool>`.
 

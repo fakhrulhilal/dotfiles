@@ -275,8 +275,8 @@ warnings.
 `csharp/<Name>.cs` into the mise install dir. Every script reports the single version `latest`, so a change only takes
 effect after `mise install -f csharp:<Name>`.
 
-Prebuilt releases: `.github/workflows/csharp.yml` builds every `csharp:<Name>` entry for linux-x64, win-x64, win-x86
-and osx-arm64 (Native AOT has no linux-x86) with `csharp/package.sh`, checks it with `csharp/smoke.sh` and uploads
+Prebuilt releases: `.github/workflows/csharp.yml` builds every `csharp:<Name>` entry for linux, windows, and osx (arm) 
+(no 32-bit builds) with `csharp/package.sh`, checks it with `csharp/smoke.sh` and uploads
 `<AssemblyName>-<target>.tar.gz/.zip` as workflow artifacts. Each script carries its own `#:property Version=`.
 To release one tool, bump that `Version` and push to master. Every master run releases each script whose version has
 no tag `<AssemblyName>-v<Version>` yet (e.g. `dotclock-v0.1.0`) and creates that tag. Never push these tags by hand.
