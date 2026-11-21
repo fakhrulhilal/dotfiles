@@ -1,6 +1,5 @@
 #!/usr/bin/env dotnet
 
-#:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
 #:property AssemblyName=dothook
 #:property Version=0.1.0
 #:property EnableConfigurationBindingGenerator=true

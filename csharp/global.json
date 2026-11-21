@@ -1,0 +1,7 @@
+{
+  "$schema": "https://www.schemastore.org/global.json",
+  "sdk": {
+    "version": "11.0.0",
+    "rollForward": "latestMinor"
+  }
+}

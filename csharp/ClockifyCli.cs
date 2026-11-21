@@ -1,6 +1,5 @@
 #!/usr/bin/env -S dotnet --
 
-#:property ExperimentalFileBasedProgramEnableTransitiveDirectives=true
 #:property AssemblyName=dotclock
 #:property Version=0.1.0
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
@@ -247,10 +246,12 @@ internal sealed class Commands {
             .Footer($"[bold green]{grandTotal.HourDisplay}[/]"));
         foreach (var row in timesheet.Rows) {
             var names = new List<string>(3);
-            if (!string.IsNullOrEmpty(row.Project))
+            if (!string.IsNullOrEmpty(row.Project)) {
                 names.Add(row.ProjectColor is { } hex && Color.TryFromHex(hex, out var color)
                     ? $"[{color.ToMarkup()}]{Markup.Escape(row.Project)}[/]"
                     : Markup.Escape(row.Project));
+            }
+
             if (!string.IsNullOrEmpty(row.Task)) names.Add(Markup.Escape(row.Task));
             names.Add($"[grey]{Markup.Escape(row.Client)}[/]");
             var cells = new List<string>(timesheet.Days.Length + 2) { string.Join(" - ", names) };
@@ -316,7 +317,7 @@ internal sealed class Commands {
                 .Where(x => workingDays.Contains(x.Day))
                 .GroupBy(x => (
                     Project: x.Entry.ProjectName ?? string.Empty,
-                    ProjectColor: x.Entry.ProjectColor,
+                    x.Entry.ProjectColor,
                     Task: x.Entry.TaskName ?? string.Empty,
                     Client: x.Entry.ClientName ?? string.Empty))
                 .Select(group => new TimesheetRow(
@@ -326,8 +327,8 @@ internal sealed class Commands {
                     group.Key.Client,
                     group.GroupBy(x => x.Day, x => x.Entry.TimeInterval.Duration ?? 0)
                         .ToFrozenDictionary(x => x.Key, x => Duration.FromSeconds(x.Sum()))))
-                .OrderBy(row => row.Project)
-                .ThenBy(row => row.Task)
+                .OrderBy(row => row.Project, CompareMode)
+                .ThenBy(row => row.Task, CompareMode)
                 .ToArray();
         }
     }
@@ -335,7 +336,7 @@ internal sealed class Commands {
 
 file static class Helper {
     private const StringComparison CompareMode2 = StringComparison.InvariantCultureIgnoreCase;
-    public static readonly IEqualityComparer<string> CompareMode = StringComparer.InvariantCultureIgnoreCase;
+    public static readonly StringComparer CompareMode = StringComparer.InvariantCultureIgnoreCase;
     public static string WorkspaceId { get; set; } = string.Empty;
     private static readonly ConcurrentDictionary<string, GetProjectResponse> ProjectCaches = new(CompareMode);
     public static Task UiDelay() => Task.Delay(50);
