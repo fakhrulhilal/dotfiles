@@ -62,7 +62,7 @@ internal sealed class Commands {
         CancellationToken cancellationToken = default) {
         var now = DateTime.Now;
         var validationResult = ValidateAndGetEntries();
-        if (validationResult is not Result<ValidationCodes>.HasValue<AddTimeEntry[]> validationSuccess) {
+        if (validationResult is not Result<ValidationCodes>.HasValue<AddTimeEntry[]> { Value: var entries }) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {validationResult.Error.ToStringFast(true)}");
             return 1;
         }
@@ -88,11 +88,11 @@ internal sealed class Commands {
         day ??= DateOnly.FromDateTime(now);
         var totalDuration = Duration.Empty;
         await AnsiConsole.Live(table).StartAsync(async ctx => {
-            var projects = infoSuccess.Value.ToFrozenDictionary(x => x.Name, x => x, CompareMode);
+            var projects = infoSuccess.Value.ToFrozenDictionary(x => x.Name, CompareMode);
             var parallelOptions = new ParallelOptions {
                 MaxDegreeOfParallelism = Const.MaxParallelism, CancellationToken = cancellationToken
             };
-            await Parallel.ForEachAsync(validationSuccess.Value, parallelOptions, async (entry, token) => {
+            await Parallel.ForEachAsync(entries, parallelOptions, async (entry, token) => {
                 if (token.IsCancellationRequested) return;
 
                 var (start, end, time) = GetDuration(entry, day.Value);
@@ -175,7 +175,6 @@ internal sealed class Commands {
 
             ctx.Status("Getting project information");
             WorkspaceId = userInfo.ActiveWorkspace;
-            var entries = validationSuccess.Value;
             var projectNames = entries.Select(x => x.Project).ToHashSet(CompareMode);
             var projects = await client.GetProjectByNames(projectNames, cancellationToken);
             return projects is not { Length: > 0 } ? GetInfoCodes.ProjectsNotFound : projects;
@@ -198,7 +197,7 @@ internal sealed class Commands {
         [HideDefaultValue] string? reportUrl = null,
         CancellationToken cancellationToken = default) {
         var validationResult = ValidateAndGetPeriod();
-        if (validationResult is not Result<ValidationCodes>.HasValue<TimesheetPeriod> validationSuccess) {
+        if (validationResult is not Result<ValidationCodes>.HasValue<TimesheetPeriod> { Value: var timePeriod }) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {validationResult.Error.ToStringFast(true)}");
             return 1;
         }
@@ -213,19 +212,18 @@ internal sealed class Commands {
             .Spinner(Spinner.Known.Dots12)
             .SpinnerStyle(Style.Parse("blue"))
             .StartAsync("Getting information", async ctx => await GetInformation(ctx));
-        if (infoResult is not Result<GetInfoCodes>.HasValue<Timesheet> infoSuccess) {
+        if (infoResult is not Result<GetInfoCodes>.HasValue<Timesheet> { Value: var timesheet }) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {infoResult.Error.ToStringFast(true)}");
             return 1;
         }
 
-        var timesheet = infoSuccess.Value;
         if (timesheet.Days is []) {
             AnsiConsole.MarkupLine(
                 $"[yellow]WARNING[/]: No working day between {timesheet.Start:ddd, d MMM yyyy} and {timesheet.End:ddd, d MMM yyyy}");
             return 0;
         }
 
-        var isMonthly = validationSuccess.Value is TimesheetPeriod.ThisMonth or TimesheetPeriod.LastMonth;
+        var isMonthly = timePeriod is TimesheetPeriod.ThisMonth or TimesheetPeriod.LastMonth;
         var today = DateOnly.FromDateTime(DateTime.Now);
         var table = new Table().Border(TableBorder.Simple)
             .Title($"Timesheet {timesheet.Start:ddd, d MMM yyyy} - {timesheet.End:ddd, d MMM yyyy}",
@@ -290,7 +288,7 @@ internal sealed class Commands {
 
             ctx.Status("Getting workspace and time entry report");
             WorkspaceId = userInfo.ActiveWorkspace;
-            var (start, end) = GetDateRange(validationSuccess.Value, DateOnly.FromDateTime(DateTime.Now),
+            var (start, end) = GetDateRange(timePeriod, DateOnly.FromDateTime(DateTime.Now),
                 userInfo.Settings.WeekStart);
             var workspaceTask = client.GetWorkspace();
             var reportTask = reportClient.GetDetailedReport(
