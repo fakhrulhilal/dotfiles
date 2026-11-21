@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet
 
 #:property AssemblyName=dothook
-#:property Version=0.1.0
+#:property Version=0.1.1
 #:property PackageId=FM.Dothook
 #:property Description="Self-hosted webhook receiver that logs incoming requests and shows them as JSON, curl or fetch."
 #:property PackageTags=dotnet-tool;webhook;http;request-inspector

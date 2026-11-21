@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet --
 
 #:property AssemblyName=dotkafka
-#:property Version=0.1.0
+#:property Version=0.1.1
 #:property PackageId=FM.Dotkafka
 #:property Description="Kafka and Schema Registry toolkit: produce messages and manage topics."
 #:property PackageTags=dotnet-tool;cli;kafka;schema-registry;avro
@@ -68,7 +68,7 @@ sealed class Commands {
                 _ => throw new InvalidOperationException("Message payload is not specified.")
             };
             if (await schemaRegistryClient.TryPopulateValue(kafkaMessage, topic, payload)
-                is not Result.Success<int> { Value: var schemaId }) {
+                is not Result.HasValue<int> { Value: var schemaId }) {
                 Console.WriteLineInterpolated(
                     $" {CC.Red}❌ Error{CC.Default}: Could not find valid schema for topic '{topic}'");
                 return 1;
@@ -117,7 +117,7 @@ sealed class Commands {
             BuildSchemaRegistryClient(registryUrl) ??
             throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
         var schemaResult = await schemaRegistryClient.GetSchema(topic);
-        if (schemaResult is not Result.Success<SchemaInfo> { Value: var schema }) {
+        if (schemaResult is not Result.HasValue<SchemaInfo> { Value: var schema }) {
             switch (schemaResult.Error) {
                 case { Code: Codes.NotFound }:
                     Console.WriteLineInterpolated(
@@ -260,7 +260,7 @@ sealed class Commands {
             var subject = $"{spec.Topic}-value";
             switch (await schemaRegistryClient.RegisterSchemaAsync(spec.Topic, spec.ValueSchema, schemaDir!,
                         cancellationToken)) {
-                case Result.Success<string> { Value: var schemaId }:
+                case Result.HasValue<string> { Value: var schemaId }:
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     registeredSchemaCount++;
@@ -366,7 +366,7 @@ sealed class Commands {
                 throw new ArgumentNullException(nameof(registryUrl), "Schema registry URL is not specified properly");
             var subject = $"{topic}-value";
             switch (await schemaRegistryClient.RegisterSchemaAsync(topic, schemaFile, schemaDir!, cancellationToken)) {
-                case Result.Success<string> { Value: var schemaId }:
+                case Result.HasValue<string> { Value: var schemaId }:
                     Console.WriteLineInterpolated(
                         $"    {CC.Green}✓{CC.Default} Registered schema for {CC.Cyan}{subject}{CC.Default} (ID: {CC.Cyan}{schemaId}){CC.Default}");
                     break;
