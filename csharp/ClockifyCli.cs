@@ -1,7 +1,7 @@
 #!/usr/bin/env -S dotnet --
 
 #:property AssemblyName=dotclock
-#:property Version=0.1.0
+#:property Version=0.1.1
 #:property PackageId=FM.Dotclock
 #:property Description="Clockify from the command line: bulk-add time entries and view timesheets."
 #:property PackageTags=dotnet-tool;cli;clockify;timesheet;time-tracking
@@ -62,7 +62,7 @@ internal sealed class Commands {
         CancellationToken cancellationToken = default) {
         var now = DateTime.Now;
         var validationResult = ValidateAndGetEntries();
-        if (validationResult is not Result<ValidationCodes>.Success<AddTimeEntry[]> validationSuccess) {
+        if (validationResult is not Result<ValidationCodes>.HasValue<AddTimeEntry[]> validationSuccess) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {validationResult.Error.ToStringFast(true)}");
             return 1;
         }
@@ -74,7 +74,7 @@ internal sealed class Commands {
             .Spinner(Spinner.Known.Dots12)
             .SpinnerStyle(Style.Parse("blue"))
             .StartAsync("Getting information", async ctx => await GetInformation(ctx));
-        if (infoResult is not Result<GetInfoCodes>.Success<GetProjectResponse[]> infoSuccess) {
+        if (infoResult is not Result<GetInfoCodes>.HasValue<GetProjectResponse[]> infoSuccess) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {infoResult.Error.ToStringFast(true)}");
             return 1;
         }
@@ -198,7 +198,7 @@ internal sealed class Commands {
         [HideDefaultValue] string? reportUrl = null,
         CancellationToken cancellationToken = default) {
         var validationResult = ValidateAndGetPeriod();
-        if (validationResult is not Result<ValidationCodes>.Success<TimesheetPeriod> validationSuccess) {
+        if (validationResult is not Result<ValidationCodes>.HasValue<TimesheetPeriod> validationSuccess) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {validationResult.Error.ToStringFast(true)}");
             return 1;
         }
@@ -213,7 +213,7 @@ internal sealed class Commands {
             .Spinner(Spinner.Known.Dots12)
             .SpinnerStyle(Style.Parse("blue"))
             .StartAsync("Getting information", async ctx => await GetInformation(ctx));
-        if (infoResult is not Result<GetInfoCodes>.Success<Timesheet> infoSuccess) {
+        if (infoResult is not Result<GetInfoCodes>.HasValue<Timesheet> infoSuccess) {
             AnsiConsole.MarkupLine($"[red]ERROR[/]: {infoResult.Error.ToStringFast(true)}");
             return 1;
         }

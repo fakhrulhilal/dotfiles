@@ -29,8 +29,8 @@ public abstract record Result<TError> : IResult {
         internal Failure(TError error) : base(false, error) { }
     }
 
-    public sealed record Success<TValue> : WithValue<TValue> {
-        internal Success(TValue value) : base(true, default!) => Value = value;
+    public sealed record HasValue<TValue> : WithValue<TValue> {
+        internal HasValue(TValue value) : base(true, default!) => Value = value;
         public TValue Value { get; }
     }
 
@@ -42,6 +42,6 @@ public abstract record Result<TError> : IResult {
     public static Success Ok() => new();
     public static Failure Fail(TError error) => new(error);
     public static implicit operator Result<TError>(TError error) => Fail(error);
-    public static Success<TValue> Ok<TValue>(TValue value) => new(value);
+    public static HasValue<TValue> Ok<TValue>(TValue value) => new(value);
     public static Failure<TValue> Fail<TValue>(TError error) => new(error);
 }
