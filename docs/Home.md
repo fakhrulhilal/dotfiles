@@ -14,8 +14,8 @@ Usage guides for the personal CLI tools in and a few setup notes. The pages are 
 
 ### Getting a tool
 
-These tools are released as Native AOT binaries for Linux x64, Windows x64/x86 and macOS
-arm64. Install one with [mise](https://mise.jdx.dev) by adding an alias to `~/.config/mise/config.toml`:
+These tools are released as Native AOT binaries for Linux, Windows and macOS
+arm (64bit only). Install one with [mise](https://mise.jdx.dev) by adding an alias to `~/.config/mise/config.toml`:
 
 ```toml
 [tool_alias]
