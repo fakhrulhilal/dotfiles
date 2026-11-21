@@ -2,6 +2,9 @@
 
 #:property AssemblyName=dotclock
 #:property Version=0.1.0
+#:property PackageId=FM.Dotclock
+#:property Description="Clockify from the command line: bulk-add time entries and view timesheets."
+#:property PackageTags=dotnet-tool;cli;clockify;timesheet;time-tracking
 #:property EnumGenerator_EnumMetadataSource=DescriptionAttribute
 
 #:property OptimizationPreference=Size

@@ -284,6 +284,13 @@ Users install it through the `[tool_alias]` entries in `config/mise/conf.d/dotne
 an alias for each new tool: mise caches versions per tool name, so two `github:fakhrulhilal/dotfiles[...]` specs would
 share one cache.
 
+.NET tools: `package.sh` publishes through `dotnet pack`, so the same Native AOT build also yields a `<PackageId>.<rid>`
+tool package (and, with `--pointer` on linux-x64, the `<PackageId>` pointer package). On master, `csharp.yml` pushes
+every tool whose `Version` is not on nuget.org yet, using Trusted Publishing and the variable `NUGET_USER` of the GitHub
+environment `nuget.org`. Each tool script declares `#:property PackageId=FM.<Name>` (the bare names are taken on
+nuget.org), `Description` and `PackageTags`; the command stays its `AssemblyName` (`dotnet tool install -g FM.Dotgit`
+gives `dotgit`).
+
 `WebhookCli.cs` is deployed with `csharp/docker-compose.yaml`: profile `dev` adds an ngrok tunnel, profile `prod` adds
 Traefik with one Let's Encrypt wildcard certificate (Porkbun DNS challenge) and routes each container by its
 `traefik.*` labels. Traefik reaches Docker only through `socket-proxy` (read-only API, internal network). This is a

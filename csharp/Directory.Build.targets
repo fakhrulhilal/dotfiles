@@ -1,0 +1,13 @@
+<Project>
+  <!-- package.sh passes PackageReadmeSource, a copy of docs/<Script>.md: file-based apps have no item directive. -->
+  <PropertyGroup Condition="'$(PackageReadmeSource)' != ''">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PackageReadmeSource)' != ''">
+    <None Include="$(PackageReadmeSource)" Pack="true" PackagePath="README.md" Visible="false" />
+  </ItemGroup>
+  <!-- A tool package holds the tool alone; the Web SDK would also pack its content files (global.json). -->
+  <ItemGroup>
+    <Content Update="@(Content)" Pack="false" />
+  </ItemGroup>
+</Project>

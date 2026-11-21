@@ -123,15 +123,16 @@ To skip install Mac GUI apps, export variable `SKIP_INSTALL_MAC_APPS` (regardles
 
 [![build](https://img.shields.io/github/actions/workflow/status/fakhrulhilal/dotfiles/csharp.yml?branch=master&label=build)](https://github.com/fakhrulhilal/dotfiles/actions/workflows/csharp.yml)
 
-Native AOT builds of the C# file-based apps in [csharp/](csharp), published as GitHub releases for Linux x64,
-Windows x64/x86 and macOS arm64. Each tool is versioned on its own and released on the tag
-`<tool>-v<version>` as soon as its version is bumped.
+Native AOT builds of the C# file-based apps in [csharp/](csharp) for Linux x64, Windows x64/x86 and macOS arm64,
+published as GitHub releases and as .NET tools on nuget.org. Each tool is versioned on its own and released as soon as
+its version is bumped: on the tag `<tool>-v<version>` and as the nuget.org package `FM.<Tool>`.
 
-| Tool       | Release                                                                                                                                                                                    | Source                                  | Description                                                                     |
-|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|---------------------------------------------------------------------------------|
-| `dotclock` | [![dotclock](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotclock-v*&label=dotclock)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotclock&expanded=true) | [ClockifyCli.cs](csharp/ClockifyCli.cs) | Clockify client: bulk-add time entries from JSON, timesheet report per work day |
-| `dotkafka` | [![dotkafka](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotkafka-v*&label=dotkafka)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotkafka&expanded=true) | [KafkaCli.cs](csharp/KafkaCli.cs)       | Kafka client: create/delete topics, register schemas, produce single or batches |
-| `dothook`  | [![dothook](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dothook-v*&label=dothook)](https://github.com/fakhrulhilal/dotfiles/releases?q=dothook&expanded=true)     | [WebhookCli.cs](csharp/WebhookCli.cs)   | Webhook receiver that logs and formats incoming requests (SQLite or PostgreSQL) |
+| Tool       | Release                                                                                                                                                                                    | NuGet                                                                                                                      | Source                                      | Description                                                                     |
+|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|---------------------------------------------|---------------------------------------------------------------------------------|
+| `dotclock` | [![dotclock](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotclock-v*&label=dotclock)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotclock&expanded=true) | [![FM.Dotclock](https://img.shields.io/nuget/v/FM.Dotclock?label=FM.Dotclock)](https://www.nuget.org/packages/FM.Dotclock) | [ClockifyCli.cs](csharp/ClockifyCli.cs)     | Clockify client: bulk-add time entries from JSON, timesheet report per work day |
+| `dotkafka` | [![dotkafka](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotkafka-v*&label=dotkafka)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotkafka&expanded=true) | [![FM.Dotkafka](https://img.shields.io/nuget/v/FM.Dotkafka?label=FM.Dotkafka)](https://www.nuget.org/packages/FM.Dotkafka) | [KafkaCli.cs](csharp/KafkaCli.cs)           | Kafka client: create/delete topics, register schemas, produce single or batches |
+| `dothook`  | [![dothook](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dothook-v*&label=dothook)](https://github.com/fakhrulhilal/dotfiles/releases?q=dothook&expanded=true)     | [![FM.Dothook](https://img.shields.io/nuget/v/FM.Dothook?label=FM.Dothook)](https://www.nuget.org/packages/FM.Dothook)     | [WebhookCli.cs](csharp/WebhookCli.cs)       | Webhook receiver that logs and formats incoming requests (SQLite or PostgreSQL) |
+| `dotgit`   | [![dotgit](https://img.shields.io/github/v/release/fakhrulhilal/dotfiles?filter=dotgit-v*&label=dotgit)](https://github.com/fakhrulhilal/dotfiles/releases?q=dotgit&expanded=true)         | [![FM.Dotgit](https://img.shields.io/nuget/v/FM.Dotgit?label=FM.Dotgit)](https://www.nuget.org/packages/FM.Dotgit)         | [RepositoryCli.cs](csharp/RepositoryCli.cs) | Git toolkit: update every repository in a folder, clone a set of repositories   |
 
 ### Install with mise
 
@@ -160,3 +161,14 @@ mise caches the version list per tool name and ignores the options in brackets, 
 this repo would see the first tool's versions. Install only one tool this way, or use aliases.
 
 mise hides releases younger than 24 hours by default. Add `--minimum-release-age 0` to install a fresh release.
+
+### Install as a .NET tool
+
+Needs the .NET SDK 10 or later. `dotnet tool` picks the native build for the current machine, and the command keeps
+the tool's name:
+
+```shell
+dotnet tool install -g FM.Dotclock                    # latest, gives `dotclock`
+dotnet tool install -g FM.Dotclock --version 0.1.0    # specific version
+dotnet tool update -g FM.Dotclock
+```
