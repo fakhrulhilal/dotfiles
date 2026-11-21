@@ -5,6 +5,13 @@ name: csharp
 # Every run uploads them as workflow artifacts. On master, every script whose Version has no <AssemblyName>-v<Version>
 # tag yet (e.g. dotclock-v0.1.0) is released: bumping a script's Version releases that tool alone. mise installs it with
 #   mise use -g 'github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]'
+#
+# The same build is also packed as a Native AOT .NET tool: one <PackageId>.<rid> package per target plus a <PackageId>
+# pointer package (packed on linux-x64). On master, every tool whose Version is not on nuget.org yet is pushed there:
+#   dotnet tool install -g FM.Dotclock
+# nuget.org Trusted Publishing needs no stored API key. One-time setup: a nuget.org Trusted Publishing policy for
+# repository fakhrulhilal/dotfiles and workflow file csharp.yml, and the variable NUGET_USER in the GitHub environment
+# nuget.org holding the nuget.org profile name (not an email) that owns the policy.
 on:
   push:
     branches: [ master ]
@@ -32,6 +39,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       releases: ${{ steps.plan.outputs.releases }}
+      packages: ${{ steps.plan.outputs.packages }}
     steps:
       - uses: actions/checkout@v7
 
@@ -44,25 +52,39 @@ jobs:
         run: |
           scripts=$(grep -rhoE '"csharp:[A-Za-z0-9_]+"' config/mise | sed -E 's/"csharp:(.*)"/\1/')
           releases='[]'
+          packages='[]'
           for s in $scripts; do
-            props=$(dotnet build "csharp/$s.cs" -getProperty:AssemblyName -getProperty:Version)
+            props=$(dotnet build "csharp/$s.cs" -getProperty:AssemblyName -getProperty:Version -getProperty:PackageId)
             tool=$(jq -r '.Properties.AssemblyName' <<< "$props")
             version=$(jq -r '.Properties.Version' <<< "$props")
+            id=$(jq -r '.Properties.PackageId' <<< "$props")
             tag=$tool-v$version
             if [[ -n $(git ls-remote --tags origin "refs/tags/$tag") ]]; then
               echo "$tag is already released"
             else
               echo "$tag is not released yet"
               echo "- \`$tag\` is not released yet" >> "$GITHUB_STEP_SUMMARY"
-              releases=$(jq -c --arg tool "$tool" --arg version "$version" '. + [ { $tool, $version } ]' <<< "$releases")
+              releases=$(jq -c --arg tool "$tool" --arg version "$version" --arg id "$id" \
+                '. + [ { $tool, $version, $id } ]' <<< "$releases")
+            fi
+            # nuget.org lists the versions of a package (lowercase id) here; 404 means it was never published.
+            index=https://api.nuget.org/v3-flatcontainer/$(tr '[:upper:]' '[:lower:]' <<< "$id")/index.json
+            if curl -fs "$index" | jq -r '.versions[]' | grep -qixF -- "$version"; then
+              echo "$id $version is already on nuget.org"
+            else
+              echo "$id $version is not on nuget.org yet"
+              echo "- \`$id $version\` is not on nuget.org yet" >> "$GITHUB_STEP_SUMMARY"
+              packages=$(jq -c --arg id "$id" --arg version "$version" '. + [ { $id, $version } ]' <<< "$packages")
             fi
           done
           echo "releases=$releases" >> "$GITHUB_OUTPUT"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          # linux-x64 also packs the .NET tool pointer package: the SDK packs it together with the host's RID package.
           targets='[
-            { "rid": "linux-x64", "os": "ubuntu-latest" },
-            { "rid": "win-x64", "os": "windows-latest" },
-            { "rid": "win-x86", "os": "windows-latest" },
-            { "rid": "osx-arm64", "os": "macos-latest" }
+            { "rid": "linux-x64", "os": "ubuntu-latest", "pointer": true },
+            { "rid": "win-x64", "os": "windows-latest", "pointer": false },
+            { "rid": "win-x86", "os": "windows-latest", "pointer": false },
+            { "rid": "osx-arm64", "os": "macos-latest", "pointer": false }
           ]'
           # shellcheck disable=SC2086 # one script name per word
           matrix=$(jq -nc --argjson targets "$targets" \
@@ -83,6 +105,7 @@ jobs:
     env:
       SCRIPT: ${{ matrix.script }}
       RID: ${{ matrix.rid }}
+      POINTER: ${{ matrix.pointer }}
     steps:
       - uses: actions/checkout@v7
 
@@ -102,13 +125,28 @@ jobs:
 
       - name: Publish
         id: package
-        run: csharp/package.sh "$SCRIPT" "$RID" dist
+        run: |
+          if [[ $POINTER == true ]]; then
+            csharp/package.sh --pointer "$SCRIPT" "$RID" dist
+          else
+            csharp/package.sh "$SCRIPT" "$RID" dist
+          fi
 
       - name: Smoke test
         env:
           EXE: ${{ steps.package.outputs.exe }}
           VERSION: ${{ steps.package.outputs.version }}
         run: csharp/smoke.sh "$EXE" "$VERSION"
+
+      # The RID package holds the binary smoke-tested above; check that `dotnet tool install` lays it out as a command.
+      - name: Check the .NET tool installs
+        env:
+          ID: ${{ steps.package.outputs.id }}
+          NAME: ${{ steps.package.outputs.name }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          dotnet tool install "$ID.$RID" --version "$VERSION" --add-source dist --tool-path .tools
+          ls .tools/"$NAME"*
 
       - name: Report size
         env:
@@ -122,6 +160,12 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/*.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nupkg-${{ steps.package.outputs.id }}-${{ matrix.rid }}
+          path: dist/*.nupkg
           if-no-files-found: error
 
   release:
@@ -145,6 +189,7 @@ jobs:
     env:
       TOOL: ${{ matrix.tool }}
       VERSION: ${{ matrix.version }}
+      ID: ${{ matrix.id }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -191,6 +236,12 @@ jobs:
           \`\`\`shell
           mise use -g 'github:${GITHUB_REPOSITORY}[version_prefix=${TOOL}-v]@${VERSION}'
           \`\`\`
+
+          Or as a .NET tool from [nuget.org](https://www.nuget.org/packages/${ID}/${VERSION}) (.NET SDK 10 or later):
+
+          \`\`\`shell
+          dotnet tool install -g ${ID} --version ${VERSION}
+          \`\`\`
           EOF
 
       # gh uploads the assets to a draft and publishes it last, so the tag only appears once the release is complete.
@@ -202,3 +253,73 @@ jobs:
           if [[ $VERSION == *-* ]]; then prerelease=(--prerelease); fi
           gh release create "$TOOL-v$VERSION" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "$TOOL $VERSION" --notes-file notes.md --latest=false "${prerelease[@]}"
+
+  nuget:
+    needs: [ plan, build ]
+    # Only master publishes. A tool whose packages are all built is published even if another tool's build failed.
+    if: >-
+      !cancelled() && needs.plan.result == 'success' && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/master' && needs.plan.outputs.packages != '[]'
+    name: nuget ${{ matrix.id }} ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.packages) }}
+    # Holds the NUGET_USER variable; a nuget.org Trusted Publishing policy may also be pinned to this environment.
+    environment: nuget.org
+    permissions:
+      contents: read
+      # Trusted Publishing exchanges the workflow's OIDC token for a short-lived nuget.org API key.
+      id-token: write
+      # Artifact attestations (signed SLSA build provenance).
+      attestations: write
+      artifact-metadata: write
+    env:
+      ID: ${{ matrix.id }}
+      VERSION: ${{ matrix.version }}
+      RIDS: linux-x64 win-x64 win-x86 osx-arm64
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: nupkg-${{ matrix.id }}-*
+          path: dist/
+          merge-multiple: true
+
+      # RID packages first, so the pointer package never points at a package that is not pushed yet.
+      - name: List packages in push order
+        run: |
+          {
+            for rid in $RIDS; do echo "$ID.$rid.$VERSION.nupkg"; done
+            echo "$ID.$VERSION.nupkg"
+          } > packages.txt
+          missing=0
+          while read -r f; do
+            if [[ -f "dist/$f" ]]; then echo "ok      $f"; else echo "::error::missing $f"; missing=1; fi
+          done < packages.txt
+          exit $missing
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*.nupkg
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Log in to nuget.org
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          while read -r f; do
+            dotnet nuget push "dist/$f" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done < packages.txt
+          echo "Published \`$ID $VERSION\`: \`dotnet tool install -g $ID\`" >> "$GITHUB_STEP_SUMMARY"

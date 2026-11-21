@@ -2,6 +2,9 @@
 
 #:property AssemblyName=dotkafka
 #:property Version=0.1.0
+#:property PackageId=FM.Dotkafka
+#:property Description="Kafka and Schema Registry toolkit: produce messages and manage topics."
+#:property PackageTags=dotnet-tool;cli;kafka;schema-registry;avro
 #:property TrimmerRootDescriptor=KafkaCliTrimmerRoots.xml
 #:property TrimMode=partial
 

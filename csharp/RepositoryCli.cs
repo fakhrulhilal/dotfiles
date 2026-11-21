@@ -2,6 +2,9 @@
 
 #:property AssemblyName=dotgit
 #:property Version=0.1.0
+#:property PackageId=FM.Dotgit
+#:property Description="Git repository toolkit: clone and update many repositories at once."
+#:property PackageTags=dotnet-tool;cli;git;repository
 
 #:package ConsoleAppFramework@*
 #:package LibGit2Sharp@*
