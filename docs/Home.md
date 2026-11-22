@@ -5,39 +5,12 @@ Usage guides for the personal CLI tools in and a few setup notes. The pages are 
 
 ## Tools
 
-| Tool                              | Binary     | What it does                                                    |
-|-----------------------------------|------------|-----------------------------------------------------------------|
-| [ClockifyCli](ClockifyCli.md)     | `dotclock` | Clockify: bulk-add time entries, timesheet per working day      |
-| [KafkaCli](KafkaCli.md)           | `dotkafka` | Kafka: manage topics and Avro schemas, produce messages         |
-| [WebhookCli](WebhookCli.md)       | `dothook`  | Webhook receiver that stores requests, verifies HMAC signatures |
-| [RepositoryCli](RepositoryCli.md) | `dotgit`   | Git tool that manage repositories from single folder/remote     |
-
-### Getting a tool
-
-These tools are released as Native AOT binaries for Linux, Windows and macOS
-arm (64bit only). Install one with [mise](https://mise.jdx.dev) by adding an alias to `~/.config/mise/config.toml`:
-
-```toml
-[tool_alias]
-dotclock = "github:fakhrulhilal/dotfiles[version_prefix=dotclock-v]"
-dotkafka = "github:fakhrulhilal/dotfiles[version_prefix=dotkafka-v]"
-dothook = "github:fakhrulhilal/dotfiles[version_prefix=dothook-v]"
-dotgit  = "github:fakhrulhilal/dotfiles[version_prefix=dotgit-v]"
-```
+Every tool is also a C# file-based app, so with the .NET 10 SDK (10.0.300 or later) it runs straight from a clone, 
+from inside `csharp/`. We can install globally (see [README.md](../README.md#tools) for installation details), or execute 
+it directly
 
 ```shell
-# option 1: use github release
-mise use -g dotkafka
-
-# option 2: clone repo and direct installation
-mise use -g csharp:KafkaCli
-```
-
-The releases are listed on the [releases page](https://github.com/fakhrulhilal/dotfiles/releases). Every tool is also a
-C# file-based app, so with the .NET 10 SDK (10.0.300 or later) it runs straight from a clone, from inside `csharp/`:
-
-```shell
-# option 1: when installed through mise
+# option 1: when installed globally
 dotkafka init --partition 5
 
 # option 2: direct execution, requires .NET 10 SDK (10.0.300 or later)
@@ -50,9 +23,12 @@ dotnet run KafkaCli.cs -- init --partition 5
 ### Conventions shared by the tools
 
 - **Settings order:** command line option first, then an environment variable. Each page lists the variable names.
+- Each CLI should respect common variable used for defining resource, such as PostgreSQL uses `PGUSER`, `PGHOST`, etc 
+  for defining connection. This is another environment variable fallback
 - **Connection URLs:** connections to servers use a URL-like format,
   `[scheme://][user:password@]host[:port][/path][?option=value]`. A `secure=true` query option, or a scheme such as
-  `https`, `ssl` or `tls`, turns on TLS. Other query options configure the client. 
+  `https`, `ssl` or `tls`, `secure`, turns on TLS. When `trustServerCertificate` defined in query string, then every 
+  helper should ignore security certificate from the server. Other query options configure the client. 
   See [../csharp/models/Url.cs](`Url.cs`) for more details.
 - **Exit codes:** `0` on success, `1` when validation or the request fails.
 - **Help:** every command accepts `-h` / `--help`.

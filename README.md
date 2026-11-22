@@ -172,3 +172,14 @@ dotnet tool install -g FM.Dotclock                    # latest, gives `dotclock`
 dotnet tool install -g FM.Dotclock --version 0.1.0    # specific version
 dotnet tool update -g FM.Dotclock
 ```
+
+### Build and install locally
+
+To do this, you need at least [.NET 10](https://get.dot.net/10) (the latest the better) and clone this repo. Assuming 
+you have run [bootstrap.sh](./shell/bootstrap.sh) script above, then building and installing is just single command:
+
+```shell
+mise use -g csharp:ClockifyCli
+```
+
+The package name is exactly the file name withou extension. 
