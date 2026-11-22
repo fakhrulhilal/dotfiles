@@ -25,3 +25,5 @@ link_folder "$agents_dir" "$DOT_HOME/.agents/agents"
 
 unset -f link_folder
 unset skills_dir agents_dir
+
+sh "$DOT_HOME/shell/configure/ai.claude.sh"
