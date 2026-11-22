@@ -1,0 +1,16 @@
+{
+  "zoom": 1,
+  "sounds": {
+    "enabled": true
+  },
+  "font_ligatures": true,
+  "minimum_contrast": 1,
+  "font": "CaskaydiaCove NFM",
+  "font_size": 13,
+  "colors": {
+    "background": "#000000",
+    "canvas": "#000000",
+    "chrome": "#000000"
+  },
+  "appearance": "dark"
+}

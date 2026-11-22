@@ -9,6 +9,9 @@ relink "$DOT_HOME/config/ghostty.txt" "$HOME/Library/Application Support/com.mit
 mkdir -p "$HOME/.config/zed"
 relink "$DOT_HOME/config/zed/settings.json" "$HOME/.config/zed/settings.json"
 relink "$DOT_HOME/config/zed/keymap.json" "$HOME/.config/zed/keymap.json"
+mkdir -p "$HOME/.config/herdr-app"
+relink "$DOT_HOME/config/herdr-app/settings.json" "$HOME/.config/herdr-app/settings.json"
+relink "$DOT_HOME/config/herdr-app/keys.json" "$HOME/.config/herdr-app/keys.json"
 
 # Settings -> Keyboard -> Keyboard Shortcuts -> Mission Control -> Show Desktop = F11
 # Disable due to conflict with debugging shortcut (i.e. Continue)
