@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet --
 
 #:property AssemblyName=dotgit
-#:property Version=0.1.1
+#:property Version=0.2.0
 #:property PackageId=FM.Dotgit
 #:property Description="Git repository toolkit: clone and update many repositories at once."
 #:property PackageTags=dotnet-tool;cli;git;repository
@@ -128,20 +128,25 @@ sealed class Commands {
         var spinner = Spinner.Patterns.Braille;
         var spinnerLength = spinner.Count;
         var spinnerIndex = 0;
+        ReserveLines(repositories.Length);
         Console.CursorVisible = false; // Hide cursor to see progress better
-        while (!task.IsCompleted) {
-            spinnerIndex = (spinnerIndex + 1) % spinnerLength;
-            var index = spinnerIndex;
+        try {
+            while (!task.IsCompleted) {
+                spinnerIndex = (spinnerIndex + 1) % spinnerLength;
+                var index = spinnerIndex;
+                Console.Overwrite(() =>
+                    Array.ForEach(repositories, repo => repo.Dump(spinner[index])), repositories.Length);
+                await Task.Delay(25, cancellationToken);
+            }
+
             Console.Overwrite(() =>
-                Array.ForEach(repositories, repo => repo.Dump(spinner[index])), repositories.Length);
-            await Task.Delay(25, cancellationToken);
+                Array.ForEach(repositories, repo => repo.Dump(spinner[spinnerIndex])), repositories.Length);
+        }
+        finally {
+            Console.CursorVisible = true;
+            Console.SkipLines(repositories.Length);
         }
 
-        Console.Overwrite(() =>
-            Array.ForEach(repositories, repo => repo.Dump(spinner[spinnerIndex])), repositories.Length);
-
-        Console.CursorVisible = true;
-        Console.SkipLines(repositories.Length);
         if (repositories.Any(repo => repo.Status is Unknown or ErrorCodes.Timeout)) {
             Console.WriteLine("⚠️  Some repositories failed to clone. Check the output above for details.");
             return 1;
@@ -149,6 +154,14 @@ sealed class Commands {
 
         Console.WriteLine("🎉 All repositories cloned successfully!");
         return 0;
+    }
+
+    // Overwrite returns to an absolute row: if its first frame scrolls the terminal, later frames land below it.
+    private static void ReserveLines(int lines) {
+        if (Console.GetCurrentLine() + lines < Console.WindowHeight) return;
+
+        for (var i = 0; i < lines; i++) Console.NewLine(OutputPipe.Error);
+        Console.GoToLine(Console.GetCurrentLine() - lines);
     }
 
     private static int WriteError(string message, string? param = null) {
