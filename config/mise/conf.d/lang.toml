@@ -1,8 +1,22 @@
 # Language toolchains. A hard dependency of the other tiers: shell/install/mise.sh links this tier whenever
 # DOT_MINIMAL is unset. Their cargo:, go:, npm: and pipx: tools name their toolchain in `depends`.
 
+[settings]
+npm.package_manager = "bun"
+
+[settings.cargo]
+binstall = true
+
+[settings.pipx]
+uvx = true # install pipx: tools through uv
+
 [tools]
-rust = "latest"
+rust = {
+    version = "latest",
+    postinstall = '''
+        rustup target add wasm32-unknown-unknown
+        '''
+}
 cargo-binstall = "latest"
 go = "latest"
 node = "lts"
@@ -17,6 +31,6 @@ deno = {
         fi
         '''
 }
-python = { version = "3.15", postinstall = "pip install --force-reinstall pipx" }
+python = { version = "3.14", postinstall = "pip install --force-reinstall pipx" }
 uv = "latest" # Python package and project manager
 zig = "latest"
