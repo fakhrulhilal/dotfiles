@@ -112,14 +112,7 @@ bun = {
 }
 
 [settings]
-
 experimental = true
-
-[settings.cargo]
-binstall = true
-
-[settings.pipx]
-uvx = true # install pipx: tools through uv
 
 [bootstrap.macos.trackpad]
 tap_to_click = true
