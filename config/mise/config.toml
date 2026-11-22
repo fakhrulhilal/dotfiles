@@ -127,3 +127,13 @@ autohide = true
 orientation = "bottom"
 magnification = true
 largesize = 100
+
+
+[tasks.relink]
+description = "Symlink <target> to <source>, keeping an existing file as <target>.bak"
+shell = "sh -c"
+usage = '''
+arg "<source>"
+arg "<target>"
+'''
+run = '. "$DOT_HOME/shell/functions.sh" && relink "$usage_source" "$usage_target"'

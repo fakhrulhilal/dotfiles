@@ -1,0 +1,15 @@
+#theme = "light:github-light,dark:github-dark"
+theme = "github-dark"
+copy_on_select = false
+callouts = "github"
+max_width = 130
+
+[file_list]
+extensions = ["md", "markdown"]
+
+[file_list.preview]
+position = "right"
+size = "50%"
+narrow_columns = 120
+narrow_position = "bottom"
+show_by_default = true

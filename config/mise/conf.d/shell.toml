@@ -1,18 +1,21 @@
 # Extra shell utilities on top of the essentials in ../config.toml.
 
 [shell_alias]
-mdview = "mdfried"
-mdcat = "mdfried"
+mdview = "mdd"
+mdcat = "mdd"
 
 [tools]
 powershell = "latest"
 ripgrep = "latest" # grep alternative
 jless = "latest" # another JSON viewer with nested tree
-"cargo:mdfried" = {
+"github:qu8n/mddog" = {
     version = "latest",
-    default-features = false,
-    features = "svg,mermaid",
-    depends = ["rust", "cargo-binstall"]
+    postinstall = '''
+        CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}
+        mkdir -p "$CONFIG_DIR/mddog"
+        mise run relink "$DOT_HOME/config/mddog.toml" "$CONFIG_DIR/mddog/config.toml"
+        sh "$DOT_HOME/shell/configure/ai.claude.sh" mddog qu8n/mddog
+        '''
 } # markdown viewer
 "difftastic" = "latest" # similar to delta, a diff with treesitter support
 fd = "latest" # find alternative

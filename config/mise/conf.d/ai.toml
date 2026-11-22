@@ -3,7 +3,11 @@
 [tools]
 opencode = "latest"
 "copilot" = "latest"
-claude = "latest"
+claude = {
+    version = "latest",
+    minimum_release_age = "0d",
+    postinstall = 'sh "$DOT_HOME/shell/configure/ai.claude.sh"', # plugins of tools installed before claude
+}
 antigravity-cli = "latest"
 herdr = {
     version = "latest",
