@@ -87,6 +87,7 @@ sealed class Commands {
     /// <summary>
     /// Clone a Git repository to a specified destination
     /// </summary>
+    /// <param name="repositoryList">-l, List file containing repositories to clone, one line for repository</param>
     /// <param name="repositoryUrl">
     /// -u, URL of the Git repository to clone, fallback to env GIT_URL_DEFAULT.
     /// Example: git@ssh.dev.azure.com:v3/MyOrg/MyProject
@@ -98,13 +99,16 @@ sealed class Commands {
     [Command("clone|c")]
     public async Task<int> CloneAsync(
         string destinationPath,
+        string repositoryList,
         [HideDefaultValue] string? repositoryUrl = null,
         [HideDefaultValue] string? branch = null,
         int timeout = 60,
         CancellationToken cancellationToken = default) {
-        repositoryUrl ??= Environment.GetEnvironmentVariable("GIT_URL_DEFAULT") ??
-                          throw new ArgumentNullException(nameof(repositoryUrl),
-                              "Supply --repository-url or set GIT_URL_DEFAULT environment variable");
+        if (string.IsNullOrWhiteSpace(repositoryList)) return WriteError("Repository list is required");
+
+        repositoryUrl ??= Environment.GetEnvironmentVariable("GIT_URL_DEFAULT");
+        if (string.IsNullOrWhiteSpace(repositoryUrl))
+            return WriteError("Supply --repository-url or set GIT_URL_DEFAULT environment variable");
 
         repositoryUrl = repositoryUrl.TrimEnd('/');
         Console.WriteLineInterpolated($"🚀 Repository base URL: {CC.Cyan}{repositoryUrl}{CC.Default}");
@@ -112,17 +116,9 @@ sealed class Commands {
         if (!string.IsNullOrEmpty(branch))
             Console.WriteLineInterpolated($"🌿 Target branch: {CC.Cyan}{branch}{CC.Default}");
 
-        var scriptFolder = AppContext.GetData("EntryPointFileDirectoryPath")?.ToString() ?? AppContext.BaseDirectory;
-        var listPath = Path.GetFullPath(Path.Combine(scriptFolder, "..", "configurations", "repositories.txt"));
-        if (!File.Exists(listPath)) {
-            Console.WriteLineInterpolated($"❌ Repository list file not found at: {CC.Cyan}{listPath}{CC.Default}");
-            return 1;
-        }
-
-        if (await File.ReadAllLinesAsync(listPath, cancellationToken) is not { Length: > 0 } lines) {
-            Console.WriteLineInterpolated($"❌ Repository list file is empty: {CC.Cyan}{listPath}{CC.Default}");
-            return 1;
-        }
+        if (!File.Exists(repositoryList)) return WriteError("Repository list file not found", repositoryList);
+        if (await File.ReadAllLinesAsync(repositoryList, cancellationToken) is not { Length: > 0 } lines)
+            return WriteError("Repository list file is empty", repositoryList);
 
         var repositories = lines.Select(repoName =>
                 new CloneTask(repoName, destinationPath, repositoryUrl, new CloneOptions { BranchName = branch }))
@@ -153,6 +149,14 @@ sealed class Commands {
 
         Console.WriteLine("🎉 All repositories cloned successfully!");
         return 0;
+    }
+
+    private static int WriteError(string message, string? param = null) {
+        if (param is not null)
+            Console.WriteLineInterpolated($"❌ {message}: {CC.Cyan}{param}{CC.Default}");
+        else
+            Console.WriteLineInterpolated($"❌ {message}");
+        return 1;
     }
 }
 

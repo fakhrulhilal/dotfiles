@@ -82,6 +82,7 @@ repository.
 | Option                     | Default           | Notes                                                           |
 |----------------------------|-------------------|-----------------------------------------------------------------|
 | `-p`, `--destination-path` | (required)        | Folder to clone into. Each repository goes into `<path>/<name>` |
+| `-l`, `--repository-list`   | (required)| Text file containing repositories to clone|
 | `-u`, `--repository-url`   | `GIT_URL_DEFAULT` | Base URL; each repository is cloned from `<url>/<name>`         |
 | `-b`, `--branch`           | remote's default  | Branch to check out in every clone                              |
 | `-t`, `--timeout`          | `60`              | Seconds to wait for each clone                                  |
@@ -89,17 +90,14 @@ repository.
 ```shell
 # every repository of an Azure DevOps project, with the URL set once in ~/.zshenv
 export GIT_URL_DEFAULT=git@ssh.dev.azure.com:v3/MyOrg/MyProject
-dotgit clone --destination-path ~/Projects/work
+dotgit clone -l repositories.txt --destination-path ~/Projects/work
 
 # the same list from a GitHub organization, checked out on develop
-dotgit c -p ~/Projects/work -u git@github.com:my-org -b develop
+dotgit c -l repositories.txt -p ~/Projects/work -u git@github.com:my-org -b develop
 ```
 
-### The repository list
-
-The list is read from `configurations/repositories.txt`, one folder up from the script (`csharp/../configurations/` when
-run from source) or from the binary's folder when installed. It holds one repository name per line, without blank
-lines, and is not part of the repository, so create it yourself:
+Sample `repositories.txt`. It holds one repository name per line, without blank lines, and is not part of the repository, 
+so create it yourself:
 
 ```text
 api-gateway
