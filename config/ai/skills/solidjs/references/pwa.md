@@ -1,0 +1,322 @@
+# PWA: install, offline, updates
+
+The site installs as an app (Chrome's install button, Add to Home Screen) and opens without a
+network. The API is never cached: offline, the page opens and its store reports the service as
+unreachable. Code is from the todo-app Solid client.
+
+## Packages
+
+```sh
+bun add -d vite-plugin-pwa@2.0.0 @vite-pwa/assets-generator
+bun add --exact workbox-window@7.4.1
+```
+
+`workbox-window` ships in the bundle (it registers the worker), so it is a dependency. The app
+registers the worker itself instead of importing `virtual:pwa-register`, whose `registerSW` cannot
+pass `updateViaCache`.
+
+## Vite config
+
+The `VitePWA(...)` part of `vite.config.ts` (full file in `project-setup.md`):
+
+```ts
+// The shell's revision is derived from its content, not the build time, so a rebuild of
+// the same code is not announced to users as a new version.
+function addShell(entries: PrecacheEntry[]) {
+    const hash = createHash('sha256').update(readFileSync('src/Document.tsx'));
+    for (const entry of entries) hash.update(`${entry.url} ${entry.revision ?? ''}\n`);
+    const shell = { url: '/index.html', revision: hash.digest('hex').slice(0, 16), size: 0 };
+    return { manifest: [...entries, shell] };
+}
+
+VitePWA({
+    injectRegister: false,
+    registerType: 'prompt',
+    manifest: {
+        name: 'Todos',
+        short_name: 'Todos',
+        description: 'A todo list that calls the todo JSON API.',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        background_color: '#ffffff',
+        theme_color: '#ffffff',
+        icons: [
+            { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
+            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+            { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+    },
+    workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        manifestTransforms: [addShell],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api(\/|$)/, /^\/health(\/|$)/, /^\/docs(\/|$)/],
+        cleanupOutdatedCaches: true,
+    },
+}),
+```
+
+Why each setting:
+
+- **`injectRegister: false`**: start mode has no `index.html` for the plugin to inject into. The
+  manifest link is in `Document.tsx`; the worker is registered by `SystemUpdatePrompt` with
+  `workbox-window`.
+- **`registerType: 'prompt'`**: a new version waits until the user chooses Reload. `autoUpdate`
+  reloads the page on its own, which can drop what the user is typing.
+- **`manifestTransforms: [addShell]`**: the shell is prerendered after the client bundle, so when
+  Workbox lists the files, `index.html` does not exist yet. It is added by hand, with a revision
+  hashed from the other files' revisions (their names carry content hashes) and `Document.tsx`. A
+  `Date.now()` revision would make every rebuild of the same code an "update".
+- **`navigateFallback` + denylist**: navigations to the app's own paths (`/?filter=active`, deep
+  links) get the cached shell offline; anything the deployment serves itself (`/api`, `/health`,
+  `/docs`, bare or with a sub-path) goes to the network as if there were no worker.
+
+## Document
+
+```tsx
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+<link rel="icon" href="/favicon.ico" sizes="48x48" />
+<link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+{/* Written by vite-plugin-pwa (vite.config.ts) at build time. */}
+<link rel="manifest" href="/manifest.webmanifest" />
+```
+
+## Icons
+
+One SVG, `public/icon.svg`, and `bun run icons` (`pwa-assets-generator`) writes the PNGs and
+`favicon.ico` next to it. Commit what it writes; run it again after changing the SVG. A maskable
+icon needs a margin and a background:
+
+### `pwa-assets.config.ts`
+
+```ts
+import { defineConfig, minimal2023Preset } from '@vite-pwa/assets-generator/config';
+
+// `bun run icons` writes the PNG icons and favicon.ico next to public/icon.svg.
+// Run it after changing the SVG, and commit what it writes.
+export default defineConfig({
+    preset: {
+        ...minimal2023Preset,
+        // The icon fills its square; a maskable icon needs a margin and a background.
+        maskable: { ...minimal2023Preset.maskable, padding: 0.2, resizeOptions: { background: '#1447e6' } },
+        apple: { ...minimal2023Preset.apple, padding: 0.1, resizeOptions: { background: '#1447e6' } },
+    },
+    images: ['public/icon.svg'],
+});
+```
+
+## The update prompt
+
+`src/components/SystemUpdatePrompt.tsx`, rendered once in `App.tsx` (`<SystemUpdatePrompt />`):
+
+- registers the worker in production only (`import.meta.env.PROD`; the dev server has none), from
+  `onSettled`, with `new Workbox(BASE_URL + "sw.js", { scope, updateViaCache: "none" })`: every update
+  check fetches `sw.js` from the network, whatever the host's headers or the browser's cache;
+- listens for `waiting` (a new version is installed: show the banner) and `controlling` (the new
+  worker took over, here or in another tab: reload, since the old code may need files the new worker
+  no longer keeps);
+- keeps the registration in a signal, and a two-function `createEffect` starts the update checks
+  from it and the props, so new prop values replace the running timer (the effect's cleanup stops
+  the old one);
+- checks when the app comes back to the foreground (`visibilitychange`, at most once per
+  `minCheckGapMinutes`, default 1), when the device comes back online, and every
+  `checkIntervalMinutes` (default 60). The browser alone only checks around a page load, and a phone
+  resumes an installed app far more often than it reloads it;
+- shows a banner in a `role="status"` region that is always on the page (so screen readers announce
+  it): **Reload** sends the waiting worker `messageSkipWaiting()`; it takes over and `controlling`
+  reloads the page, with a 3-second `location.reload()` as a fallback if that event never comes.
+  **Later** hides it, and the new version starts when the app is next opened afresh.
+
+### `src/components/SystemUpdatePrompt.tsx`
+
+```tsx
+import { Button } from "@kobalte/core/button";
+import { createEffect, createSignal, onSettled, Show } from "solid-js";
+import { Workbox } from "workbox-window";
+import * as ui from "../ui";
+
+const MINUTE_MS = 60 * 1000;
+// Reloads anyway if the new worker's takeover is never reported after Reload.
+const RELOAD_FALLBACK_MS = 3000;
+
+interface SystemUpdatePromptProps {
+    /** Minutes between looks for a new version while the app stays open. Default: 60. */
+    checkIntervalMinutes?: number;
+    /** Least minutes between two looks when the app comes back to the foreground. Default: 1. */
+    minCheckGapMinutes?: number;
+}
+
+interface CheckTimings {
+    intervalMs: number;
+    minGapMs: number;
+}
+
+export default function SystemUpdatePrompt(props: SystemUpdatePromptProps) {
+    const [updateReady, setUpdateReady] = createSignal(false);
+    const [reloading, setReloading] = createSignal(false);
+    const [registration, setRegistration] =
+        createSignal<ServiceWorkerRegistration>();
+    let workbox: Workbox | undefined;
+
+    onSettled(() => {
+        if (!import.meta.env.PROD) return;
+        let disposed = false;
+        // updateViaCache "none": each update check fetches sw.js from the network, whatever
+        // the host's caching headers say and however long the browser would keep it.
+        workbox = new Workbox(`${import.meta.env.BASE_URL}sw.js`, {
+            scope: import.meta.env.BASE_URL,
+            updateViaCache: "none",
+        });
+        workbox.addEventListener("waiting", () => setUpdateReady(true));
+        // Also when another tab chose Reload: this tab's old code may need files the new
+        // worker no longer keeps.
+        workbox.addEventListener("controlling", () => window.location.reload());
+        void workbox.register({ immediate: true }).then((registered) => {
+            if (registered && !disposed) setRegistration(registered);
+        });
+        return () => {
+            disposed = true;
+        };
+    });
+
+    // Starts again with the new timings when the props change.
+    createEffect(
+        () => ({
+            registration: registration(),
+            timings: {
+                intervalMs: (props.checkIntervalMinutes ?? 60) * MINUTE_MS,
+                // An app can come back to the foreground many times a minute.
+                minGapMs: (props.minCheckGapMinutes ?? 1) * MINUTE_MS,
+            },
+        }),
+        ({ registration, timings }) =>
+            registration ? watchForUpdates(registration, timings) : undefined,
+    );
+
+    const startNewVersion = () => {
+        setReloading(true);
+        // The page reloads on "controlling", once the waiting worker has taken over.
+        workbox?.messageSkipWaiting();
+        setTimeout(() => window.location.reload(), RELOAD_FALLBACK_MS);
+    };
+
+    return (
+        // Always on the page, so screen readers announce what appears in it.
+        <div
+            role="status"
+            class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl"
+        >
+            <Show when={updateReady()}>
+                <div class="flex items-center justify-between gap-4 rounded-lg border bg-card p-4 text-sm text-card-foreground shadow-lg">
+                    <span>A new version of Todos is available.</span>
+                    <div class="flex gap-2">
+                        <Button
+                            class={ui.button.ghost}
+                            onClick={() => setUpdateReady(false)}
+                        >
+                            Later
+                        </Button>
+                        <Button
+                            class={ui.button.primary}
+                            disabled={reloading()}
+                            onClick={startNewVersion}
+                        >
+                            Reload
+                        </Button>
+                    </div>
+                </div>
+            </Show>
+        </div>
+    );
+}
+
+// The browser only looks for a new worker on a page load, and a phone resumes an
+// installed app far more often than it reloads it.
+function watchForUpdates(
+    registration: ServiceWorkerRegistration,
+    timings: CheckTimings,
+): () => void {
+    let lastCheck = Date.now();
+    const check = () => {
+        if (
+            !navigator.onLine ||
+            registration.installing ||
+            Date.now() - lastCheck < timings.minGapMs
+        ) {
+            return;
+        }
+        lastCheck = Date.now();
+        // A failed check (offline, host down) is tried again next time.
+        registration.update().catch(() => {});
+    };
+    const onVisibilityChange = () => {
+        if (document.visibilityState === "visible") check();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", check);
+    const timer = setInterval(check, timings.intervalMs);
+    return () => {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        window.removeEventListener("online", check);
+        clearInterval(timer);
+    };
+}
+```
+
+## Hosting
+
+- Tell the host not to keep stale copies of the files that are not content-hashed: `sw.js`,
+  `index.html`, the manifest and every app route get `Cache-Control: no-cache` (check with the
+  server, cheap 304s); hashed `/assets/*` may be `public, max-age=31536000, immutable`. Caddy:
+
+  ```caddyfile
+  @hashed path /assets/*
+  header @hashed Cache-Control "public, max-age=31536000, immutable"
+  @unhashed not path /assets/*
+  header @unhashed Cache-Control "no-cache"
+  ```
+
+  Cloudflare Pages and Netlify read `public/_headers` (`/*` → `Cache-Control: no-cache`; one rule
+  only, because both merge the headers of every matching rule). GitHub Pages cannot be configured;
+  its 10-minute cache can delay an update, never stop it.
+- Serve `dist/client` from the root of a domain (the scope, `start_url` and asset paths start at
+  `/`). Under a sub-path, set Vite's `base` and the router's `base` first.
+- Have the host answer unknown paths with `index.html` (Caddy `try_files {path} /index.html`, a
+  `404.html` copy on GitHub Pages, automatic on Cloudflare Pages).
+- Service workers run only on `https` or `localhost`/`127.0.0.1`.
+
+## The dev server and old workers
+
+The dev server has no worker, and by default answers `/sw.js` with its HTML page. A worker left on
+the same address by a production build (`bun run serve` on the dev port) then keeps answering every
+page with the old build, and its update check gets HTML, which the browser refuses: the dev server is
+hidden for good, and source edits never show. A small Vite plugin (`retireServiceWorkerInDev` in
+`vite.config.ts`, `apply: 'serve'`) answers `/sw.js` in dev with a worker that skips waiting,
+empties the caches, unregisters itself and reloads its pages.
+
+## Testing
+
+The todo-app keeps a Playwright suite for this, `npm run test:pwa` in `tests/`
+(`playwright.pwa.config.ts`, `pwa/build.ts`, `pwa/pwa.spec.ts`):
+
+- **Builds:** a global setup builds the client twice, an old and a new deploy (another
+  `TODO_API_URL` is enough to change the hashed names), into `.pwa-builds/`.
+- **Host:** the spec's own Node server serves one of them and sends `Cache-Control: public,
+  max-age=86400` on every file, the worst case; a test switches it to the new build to "deploy".
+  It counts requests for `/sw.js`, which shows exactly when a browser checked.
+- **Browsers:** WebKit as desktop Safari and as an iPhone (Safari and iOS are the main target), and
+  Chromium. Playwright's WebKit is Safari's engine, not Safari itself.
+- **Cases:** install files and a worker in control; starting without the host (stop the server:
+  Playwright's `setOffline` breaks WebKit page loads under a service worker); a deploy offered on
+  return to the foreground (not within the minimum gap, then yes) and applied by Reload; offered on
+  reopening; Later keeps the old build and the offer returns on the next load; the hourly check.
+- **Races:** WebKit runs its own update check a moment after each navigation. Before deploying,
+  wait until the server has seen no `/sw.js` request for 2 seconds, or the browser's check, not the
+  app's, finds the deploy. Use Playwright's fake clock (`page.clock.install()`,
+  `fastForward`) for the gap and the interval. Read the running build (its entry script's `src`)
+  after `waitForLoadState()`, retrying while a reload replaces the page.
