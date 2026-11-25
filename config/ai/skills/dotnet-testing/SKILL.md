@@ -15,7 +15,7 @@ old project over is covered by `migrate-vstest-to-mtp`.
 
 | Concern    | Choice                                                                                                                  |
 |------------|-------------------------------------------------------------------------------------------------------------------------|
-| Framework  | TUnit for every new test project. Existing xUnit/NUnit/MSTest projects stay unless a migration is requested, and then migrate to TUnit |
+| Framework  | TUnit for every new test project. Existing xUnit/NUnit/MSTest projects stay unless a migration is requested, and then migrate to TUnit. A project staying on xUnit follows [references/xunit.md](references/xunit.md) |
 | Runner     | Microsoft.Testing.Platform (MTP) at minimum. Never add `Microsoft.NET.Test.Sdk`, `coverlet.*` or VSTest adapters to a TUnit project |
 | Mocks      | FakeItEasy. NSubstitute for a new project where FakeItEasy doesn't fit. Moq only in a project that already uses it     |
 | Assertions | AwesomeAssertions, the Apache-2.0 community fork of FluentAssertions. Never add `FluentAssertions`; a project that has it moves over by swapping the package and the `FluentAssertions` namespace for `AwesomeAssertions` |
@@ -118,7 +118,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Dotfiles.Mail.Tests;
 
-public sealed class Testing {
+internal sealed class Testing {
     public static DateTimeOffset Now { get; } = new(2026, 1, 1, 8, 0, 0, TimeSpan.Zero);
 
     [Before(Assembly)]
@@ -126,20 +126,39 @@ public sealed class Testing {
 
     /// <summary>Assembly happy flow: every dependency registered in its successful state.</summary>
     public static IServiceProvider Configure(Action<IServiceCollection>? scenario = null) {
-        var services = new ServiceCollection()
-            .AddLogging()
-            .AddMail();                                          // production registration under test
-        services.Use<TimeProvider>(new FakeTimeProvider(Now));
-        services.Mock<ISmtpClient>(x => x.AcceptsEverything());
+        var services = new ServiceCollection();
+        DefaultServiceConfiguration(services);
         scenario?.Invoke(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
     public static MailMessage AnyMessage() => new($"subject-{Guid.NewGuid():n}", "<p>body</p>");
+
+    private static void DefaultServiceConfiguration(IServiceCollection services) {
+        services.AddApplication();
+        services.ProjectHappyPath();
+        services.AddSingleton<IConfiguration>(_ =>
+            new ConfigurationBuilder().AddInMemoryCollection(Config!).Build());
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(TestLoggingBehavior<,>));
+    }
 }
 
-public static class TestingExtensions {
+internal static class TestingExtensions {
     public static T Resolve<T>(this IServiceProvider provider) where T : notnull => provider.GetRequiredService<T>();
+
+    public static IServiceCollection Replace<TService>(
+        this IServiceCollection services,
+        Func<IServiceProvider, TService> implementationFactory,
+        ServiceLifetime lifeTime = ServiceLifetime.Singleton)
+        where TService : class
+    {
+        var serviceType = typeof(TService);
+        var existing = services.FirstOrDefault(svc => svc.ServiceType == serviceType);
+        if (existing != null) services.Remove(existing);
+        var serviceDescriptor = new ServiceDescriptor(serviceType, implementationFactory, lifeTime);
+        services.Add(serviceDescriptor);
+        return services;
+    }
 
     public static IServiceCollection Use<T>(this IServiceCollection services, T instance) where T : class {
         services.Replace(new ServiceDescriptor(typeof(T), instance));
@@ -164,6 +183,23 @@ public static class ServiceCollectionMocks {
         configure?.Invoke(mocked);
         return services.Use(mocked);
     }
+}
+
+public static class MiddlewareMocks
+{
+    private const string DefaultIdentifier = nameof(RequestDelegate);
+
+    public static IServiceCollection MockMiddleware(this IServiceCollection services, string? identifier = null)
+    {
+        return services.AddSingleton<RequestDelegate>(_ => context =>
+        {
+            context.Items[identifier ?? DefaultIdentifier] = true;
+            return Task.CompletedTask;
+        });
+    }
+
+    public static bool ReachedNextMiddleware(this HttpContext context, string? identifier = null) =>
+        context.Items.TryGetValue(identifier ?? DefaultIdentifier, out var value) && value is true;
 }
 
 public static class SmtpClientMocks {
@@ -205,6 +241,7 @@ resolved interface through `Mock.Get(instance)`.
 ```csharp
 namespace Dotfiles.Mail.Tests;
 
+using static Helper;
 using static Testing;
 
 public sealed class GivenMailSender {
@@ -329,3 +366,8 @@ implementations and a full example of each part.
 - When migrating: `[Fact]`/`[Test]` become `[Test]`; `[Theory]` + `[InlineData]` become `[Test]` + `[Arguments]`; NUnit
   `[SetUpFixture]` + `[OneTimeSetUp]` become `[Before(Assembly)]` in `Testing.cs`; fixtures shared through the
   constructor become `ClassDataSource<T>`; `Assert.*` calls become `Should()` assertions. Then wrap the existing mock setups in `Mocks/` helpers.
+- Swapping FluentAssertions for AwesomeAssertions surfaces two old mistakes. `x.Should().Equals(y)` was a silent
+  `object.Equals` call that asserted nothing; AwesomeAssertions throws `NotSupportedException`, so change it to
+  `.Be(y)`. `Throw<T>()` on a `Func<Task>` becomes `await act.Should().ThrowAsync<T>()` in an `async Task` test.
+- A test project that already has a `Testing.cs` or helpers under another shape gets them replaced by the shapes
+  above (`Configure`, `Resolve`, `Use`, `Mocks/`), not extended.

@@ -60,7 +60,35 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Shop.Application.Tests;
 
-public static class Mediator {
+internal static class Mediator {
+    // Define happy path for the whole project
+    public static IServiceCollection ProjectHappyPath(this IServiceCollection services) => services
+        .Use<TimeProvider>(_ => TimeProvider.System)
+        .Mock<ISmtpClient>(x => x.AcceptsEverything());
+
+    public class TestLoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+            where TRequest : IRequest<TResponse>
+        {
+            private readonly ILogger<TestLoggingBehavior<TRequest, TResponse>> _log;
+    
+            public TestLoggingBehavior(ILogger<TestLoggingBehavior<TRequest, TResponse>> log) {
+                _log = log;
+            }
+    
+            public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,
+                CancellationToken _) {
+                try {
+                    var response = await next();
+                    _log.LogDebug("Processing request {@Request} with outcome {@Response}", request, response);
+                    return response;
+                }
+                catch (Exception exception) when (exception is not ValidationException) {
+                    _log.LogError(exception, "Processing request {@Request} but an error occurs", request);
+                    throw;
+                }
+            }
+        }
+
     public static IValidator<TRequest> GetValidator<TRequest>(this IServiceProvider provider) =>
         provider.Resolve<IValidator<TRequest>>();
 
@@ -101,7 +129,11 @@ public static class Mediator {
     /// <summary>Captures the event published by the request handler.</summary>
     public static IServiceCollection OnTriggered<TEvent>(this IServiceCollection services, Action<TEvent> capture)
         where TEvent : INotification =>
-        services.AddSingleton<INotificationHandler<TEvent>>(new Trigger<TEvent>(capture));
+        var handler = A.Fake<INotificationHandler<TEvent>>();
+        A.CallTo(() => handler.Handle(A<TNotification>._, A<Cancellation>._))
+            .Invokes((TNotification notification, CancellationToken _) => capture(notification))
+            .Returns(Task.Completed);
+        services.Use(handler);
 
     public static THandler ResolveHandler<THandler, TEvent>(this IServiceProvider provider)
         where TEvent : INotification where THandler : class, INotificationHandler<TEvent> =>
@@ -119,14 +151,6 @@ public static class Mediator {
         if (message is not null) {
             messages.Should().Contain(message);
         }
-    }
-}
-
-file sealed class Trigger<TEvent>(Action<TEvent> capture) : INotificationHandler<TEvent>
-    where TEvent : INotification {
-    public Task Handle(TEvent notification, CancellationToken cancellation) {
-        capture(notification);
-        return Task.CompletedTask;
     }
 }
 ```
@@ -173,6 +197,7 @@ using Request = Shop.Application.Orders.Commands.CreateOrder.CreateOrderCommand;
 
 namespace Shop.Application.Tests.Orders.Commands.CreateOrder;
 
+using static Helper;
 using static Testing;
 
 public sealed class GivenCreateOrderValidator {
@@ -181,8 +206,9 @@ public sealed class GivenCreateOrderValidator {
     [Arguments(-1)]
     public async Task WhenQuantityIsNotPositiveThenQuantityIsInvalid(int quantity) {
         // arrange
-        var request = ValidRequest() with { Quantity = quantity };
-        var sut = Setup().GetValidator<Request>();
+        var request = CreateValidRequest() with { Quantity = quantity };
+        var provider  Setup();
+        var sut = provider.GetValidator<Request>();
 
         // act
         var result = await sut.ValidateAsync(request);
@@ -194,7 +220,7 @@ public sealed class GivenCreateOrderValidator {
     [Test]
     public async Task WhenCustomerIsBlockedThenCustomerIdIsInvalid() {
         // arrange
-        var request = ValidRequest();
+        var request = CreateValidRequest();
         var provider = Setup(services => services
             .Mock<ICustomerRepo>(x => x.Blocked(request.CustomerId)));
         var sut = provider.GetValidator<Request>();
@@ -209,8 +235,9 @@ public sealed class GivenCreateOrderValidator {
     [Test]
     public async Task WhenRequestIsCompleteThenItIsValid() {
         // arrange
-        var request = ValidRequest();
-        var sut = Setup().GetValidator<Request>();
+        var request = CreateValidRequest();
+        var provider = Setup();
+        var sut = provider.GetValidator<Request>();
 
         // act
         var result = await sut.ValidateAsync(request);
@@ -218,13 +245,15 @@ public sealed class GivenCreateOrderValidator {
         // assert
         result.ShouldBeValid();
     }
+}
 
-    private static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
+file static class Helper {
+    public static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
         services.Mock<ICustomerRepo>(x => x.AlwaysActive());
         scenario?.Invoke(services);
     });
 
-    private static Request ValidRequest() => new(CustomerId: Random.Shared.Next(1, int.MaxValue), Quantity: 2);
+    public static Request CreateValidRequest() => new(CustomerId: Random.Shared.Next(1, int.MaxValue), Quantity: 2);
 }
 ```
 
@@ -239,6 +268,7 @@ using Request = Shop.Application.Orders.Commands.CreateOrder.CreateOrderCommand;
 
 namespace Shop.Application.Tests.Orders.Commands.CreateOrder;
 
+using static Helper;
 using static Testing;
 
 public sealed class GivenCreateOrderHandler {
@@ -246,7 +276,7 @@ public sealed class GivenCreateOrderHandler {
     public async Task WhenOrderIsSavedThenItSucceeds() {
         // arrange
         var orders = new List<Order>();
-        var request = ValidRequest();
+        var request = CreateValidRequest();
         var provider = Setup(services => services
             .Mock<IOrderRepo>(x => x.Saves(orders.Add)));
         var sut = provider.Resolve<IMediator>();
@@ -262,12 +292,13 @@ public sealed class GivenCreateOrderHandler {
     [Test]
     public async Task WhenSavingFailsThenItFails() {
         // arrange
+        var request = CreateValidRequest();
         var provider = Setup(services => services
             .Mock<IOrderRepo>(x => x.FailsToSave()));
         var sut = provider.Resolve<IMediator>();
 
         // act
-        var result = await sut.Send(ValidRequest());
+        var result = await sut.Send(request);
 
         // assert
         result.Error.Should().Be("Unable to create the order.");
@@ -277,7 +308,7 @@ public sealed class GivenCreateOrderHandler {
     public async Task WhenOrderIsSavedThenItPublishesOrderCreated() {
         // arrange
         OrderCreated? published = null;
-        var request = ValidRequest();
+        var request = CreateValidRequest();
         var provider = Setup(services => services
             .OnTriggered<OrderCreated>(triggered => published = triggered));
         var sut = provider.Resolve<IMediator>();
@@ -288,15 +319,17 @@ public sealed class GivenCreateOrderHandler {
         // assert
         published.Should().BeEquivalentTo(new { request.CustomerId });
     }
+}
 
-    private static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
+file static class Helper {
+    public static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
         services.AlwaysValid<Request>();
         services.ClearTriggers<OrderCreated>();
         services.Mock<IOrderRepo>(x => x.Saves());
         scenario?.Invoke(services);
     });
 
-    private static Request ValidRequest() => new(CustomerId: Random.Shared.Next(1, int.MaxValue), Quantity: 2);
+    public static Request CreateValidRequest() => new(CustomerId: Random.Shared.Next(1, int.MaxValue), Quantity: 2);
 }
 ```
 
@@ -311,6 +344,7 @@ using SUT = Shop.Application.Orders.Commands.CreateOrder.SendOrderConfirmation;
 
 namespace Shop.Application.Tests.Orders.Commands.CreateOrder;
 
+using static Helper;
 using static Testing;
 
 public sealed class GivenSendOrderConfirmation {
@@ -318,7 +352,7 @@ public sealed class GivenSendOrderConfirmation {
     public async Task WhenCustomerOptedOutThenItSendsNothing() {
         // arrange
         var emails = new List<SentEmail>();
-        var @event = ValidEvent() with { NotifyCustomer = false };
+        var @event = CreateValidEvent() with { NotifyCustomer = false };
         var provider = Setup(services => services
             .Mock<IEmailService>(x => x.OnSent(emails.Add)));
         var sut = provider.ResolveHandler<SUT, Event>();
@@ -334,7 +368,7 @@ public sealed class GivenSendOrderConfirmation {
     public async Task WhenOrderIsCreatedThenItEmailsTheCustomer() {
         // arrange
         var emails = new List<SentEmail>();
-        var @event = ValidEvent();
+        var @event = CreateValidEvent();
         var provider = Setup(services => services
             .Mock<ICustomerRepo>(x => x.HasEmail(@event.CustomerId, "buyer@domain"))
             .Mock<IEmailService>(x => x.OnSent(emails.Add)));
@@ -346,14 +380,16 @@ public sealed class GivenSendOrderConfirmation {
         // assert
         emails.Should().ContainSingle().Which.To.Should().Be("buyer@domain");
     }
+}
 
-    private static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
+file static class Helper {
+    public static IServiceProvider Setup(Action<IServiceCollection>? scenario = null) => Configure(services => {
         services.ClearTriggersExcept<SUT, Event>();
         services.Mock<IEmailService>(x => x.SendsSuccessfully());
         scenario?.Invoke(services);
     });
 
-    private static Event ValidEvent() =>
+    public static Event CreateValidEvent() =>
         new(OrderId: Random.Shared.Next(1, int.MaxValue), CustomerId: Random.Shared.Next(1, int.MaxValue),
             NotifyCustomer: true);
 }
